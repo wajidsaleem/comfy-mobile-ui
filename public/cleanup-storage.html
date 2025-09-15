@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storage Cleanup and Migration</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e293b;
+            color: #f1f5f9;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #334155;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #60a5fa;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            background: #475569;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            border-left: 4px solid #60a5fa;
+        }
+        .success { border-left-color: #10b981; }
+        .error { border-left-color: #ef4444; }
+        .warning { border-left-color: #f59e0b; }
+        
+        button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+            transform: translateY(-1px);
+        }
+        button:disabled {
+            background: #64748b;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        pre {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 12px;
+            border: 1px solid #475569;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Storage Cleanup and Migration</h1>
+        
+        <div class="section">
+            <h3>📋 Available Actions</h3>
+            <button onclick="showStorageInfo()">📊 Show Storage Info</button>
+            <button onclick="migrateFromLocalStorage()">🔄 Migrate localStorage → IndexedDB</button>
+            <button onclick="clearLocalStorage()">🗑️ Clear localStorage</button>
+            <button onclick="clearIndexedDB()">🗑️ Clear IndexedDB</button>
+            <button onclick="testIndexedDB()">🧪 Test IndexedDB</button>
+        </div>
+
+        <div class="section" id="results">
+            <h3>📊 Results</h3>
+            <pre id="output">Click an action button to start...</pre>
+        </div>
+
+        <div class="section">
+            <h3>ℹ️ Current Storage Status</h3>
+            <pre id="storageStatus">Loading...</pre>
+        </div>
+    </div>
+
+    <script type="module">
+        const output = document.getElementById('output');
+        const storageStatus = document.getElementById('storageStatus');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const colorCode = type === 'error' ? '🔴' : type === 'success' ? '🟢' : type === 'warning' ? '🟡' : '🔵';
+            output.textContent += `[${timestamp}] ${colorCode} ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function clearOutput() {
+            output.textContent = '';
+        }
+
+        // Simple IndexedDB service for migration
+        class IndexedDBService {
+            constructor() {
+                this.dbName = 'ComfyMobileUI';
+                this.version = 1;
+                this.storeName = 'workflows';
+                this.db = null;
+            }
+
+            async init() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, this.version);
+                    
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => {
+                        this.db = request.result;
+                        resolve();
+                    };
+                    
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(this.storeName)) {
+                            const store = db.createObjectStore(this.storeName, { keyPath: 'id' });
+                            store.createIndex('name', 'name', { unique: false });
+                            store.createIndex('createdAt', 'createdAt', { unique: false });
+                        }
+                    };
+                });
+            }
+
+            async addWorkflow(workflow) {
+                await this.init();
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const store = transaction.objectStore(this.storeName);
+                    const request = store.put(workflow); // Use put to allow overwrite
+                    
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async getAllWorkflows() {
+                await this.init();
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([this.storeName], 'readonly');
+                    const store = transaction.objectStore(this.storeName);
+                    const request = store.getAll();
+                    
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async clear() {
+                await this.init();
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([this.storeName], 'readwrite');
+                    const store = transaction.objectStore(this.storeName);
+                    const request = store.clear();
+                    
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+        }
+
+        const indexedDBService = new IndexedDBService();
+
+        // Action functions
+        window.showStorageInfo = async function() {
+            clearOutput();
+            log('📊 Gathering storage information...', 'info');
+            
+            try {
+                // localStorage info
+                const localStorageData = JSON.parse(localStorage.getItem('comfyui_workflows') || '[]');
+                log(`localStorage workflows: ${localStorageData.length}`, 'info');
+                
+                // IndexedDB info
+                const indexedDBData = await indexedDBService.getAllWorkflows();
+                log(`IndexedDB workflows: ${indexedDBData.length}`, 'info');
+                
+                // Storage quota
+                if ('storage' in navigator && 'estimate' in navigator.storage) {
+                    const estimate = await navigator.storage.estimate();
+                    const usedMB = Math.round(estimate.usage / 1024 / 1024 * 100) / 100;
+                    const quotaMB = Math.round(estimate.quota / 1024 / 1024 * 100) / 100;
+                    const usagePercent = Math.round(estimate.usage / estimate.quota * 100 * 100) / 100;
+                    
+                    log(`Storage quota: ${usedMB}MB / ${quotaMB}MB (${usagePercent}%)`, 'info');
+                } else {
+                    log('Storage estimate API not available', 'warning');
+                }
+                
+                updateStorageStatus();
+                
+            } catch (error) {
+                log(`❌ Error gathering storage info: ${error.message}`, 'error');
+            }
+        };
+
+        window.migrateFromLocalStorage = async function() {
+            clearOutput();
+            log('🔄 Starting migration from localStorage to IndexedDB...', 'info');
+            
+            try {
+                const localStorageData = JSON.parse(localStorage.getItem('comfyui_workflows') || '[]');
+                
+                if (localStorageData.length === 0) {
+                    log('No workflows found in localStorage', 'warning');
+                    return;
+                }
+                
+                log(`Found ${localStorageData.length} workflows in localStorage`, 'info');
+                
+                let successCount = 0;
+                let errorCount = 0;
+                
+                for (const workflow of localStorageData) {
+                    try {
+                        await indexedDBService.addWorkflow(workflow);
+                        successCount++;
+                        log(`✅ Migrated: ${workflow.name || workflow.id}`, 'success');
+                    } catch (error) {
+                        errorCount++;
+                        log(`❌ Failed to migrate: ${workflow.name || workflow.id} - ${error.message}`, 'error');
+                    }
+                }
+                
+                log(`Migration completed: ${successCount} success, ${errorCount} errors`, 'info');
+                updateStorageStatus();
+                
+            } catch (error) {
+                log(`❌ Migration failed: ${error.message}`, 'error');
+            }
+        };
+
+        window.clearLocalStorage = function() {
+            clearOutput();
+            log('🗑️ Clearing localStorage...', 'info');
+            
+            try {
+                const beforeCount = JSON.parse(localStorage.getItem('comfyui_workflows') || '[]').length;
+                localStorage.removeItem('comfyui_workflows');
+                log(`✅ Cleared ${beforeCount} workflows from localStorage`, 'success');
+                updateStorageStatus();
+            } catch (error) {
+                log(`❌ Failed to clear localStorage: ${error.message}`, 'error');
+            }
+        };
+
+        window.clearIndexedDB = async function() {
+            clearOutput();
+            log('🗑️ Clearing IndexedDB...', 'info');
+            
+            try {
+                const beforeData = await indexedDBService.getAllWorkflows();
+                await indexedDBService.clear();
+                log(`✅ Cleared ${beforeData.length} workflows from IndexedDB`, 'success');
+                updateStorageStatus();
+            } catch (error) {
+                log(`❌ Failed to clear IndexedDB: ${error.message}`, 'error');
+            }
+        };
+
+        window.testIndexedDB = async function() {
+            clearOutput();
+            log('🧪 Testing IndexedDB functionality...', 'info');
+            
+            try {
+                // Test 1: Support check
+                const hasIndexedDB = 'indexedDB' in window;
+                log(`IndexedDB support: ${hasIndexedDB ? '✅ YES' : '❌ NO'}`, hasIndexedDB ? 'success' : 'error');
+                
+                if (!hasIndexedDB) return;
+                
+                // Test 2: Initialization
+                await indexedDBService.init();
+                log('✅ IndexedDB initialized successfully', 'success');
+                
+                // Test 3: Add test workflow
+                const testWorkflow = {
+                    id: 'test-' + Date.now(),
+                    name: 'Test Workflow',
+                    nodeCount: 5,
+                    createdAt: new Date().toISOString(),
+                    workflow_json: { nodes: {}, links: [] }
+                };
+                
+                await indexedDBService.addWorkflow(testWorkflow);
+                log('✅ Test workflow added successfully', 'success');
+                
+                // Test 4: Retrieve workflows
+                const workflows = await indexedDBService.getAllWorkflows();
+                log(`✅ Retrieved ${workflows.length} workflows`, 'success');
+                
+                // Test 5: Remove test workflow
+                const beforeCount = workflows.length;
+                const filteredWorkflows = workflows.filter(w => w.id !== testWorkflow.id);
+                await indexedDBService.clear();
+                for (const workflow of filteredWorkflows) {
+                    await indexedDBService.addWorkflow(workflow);
+                }
+                log('✅ Test workflow cleaned up', 'success');
+                
+                log('🎉 IndexedDB test completed successfully!', 'success');
+                updateStorageStatus();
+                
+            } catch (error) {
+                log(`❌ IndexedDB test failed: ${error.message}`, 'error');
+            }
+        };
+
+        async function updateStorageStatus() {
+            try {
+                const localData = JSON.parse(localStorage.getItem('comfyui_workflows') || '[]');
+                const indexedData = await indexedDBService.getAllWorkflows();
+                
+                let status = `📊 Current Storage Status:\n`;
+                status += `   localStorage: ${localData.length} workflows\n`;
+                status += `   IndexedDB: ${indexedData.length} workflows\n\n`;
+                
+                if ('storage' in navigator && 'estimate' in navigator.storage) {
+                    const estimate = await navigator.storage.estimate();
+                    const usedMB = Math.round(estimate.usage / 1024 / 1024 * 100) / 100;
+                    const quotaMB = Math.round(estimate.quota / 1024 / 1024 * 100) / 100;
+                    const usagePercent = Math.round(estimate.usage / estimate.quota * 100 * 100) / 100;
+                    
+                    status += `💾 Storage Quota:\n`;
+                    status += `   Used: ${usedMB}MB\n`;
+                    status += `   Quota: ${quotaMB}MB\n`;
+                    status += `   Usage: ${usagePercent}%\n\n`;
+                }
+                
+                status += `🌐 Browser Support:\n`;
+                status += `   IndexedDB: ${'indexedDB' in window ? '✅' : '❌'}\n`;
+                status += `   Storage API: ${'storage' in navigator ? '✅' : '❌'}`;
+                
+                storageStatus.textContent = status;
+            } catch (error) {
+                storageStatus.textContent = `❌ Error updating storage status: ${error.message}`;
+            }
+        }
+
+        // Initialize
+        updateStorageStatus();
+        log('🚀 Storage Cleanup Tool Ready', 'success');
+        log('Use the buttons above to manage your workflow storage', 'info');
+    </script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+/* Basic Swiper styles */
+.swiper {
+  margin-left: auto;
+  margin-right: auto;
+  position: relative;
+  overflow: hidden;
+  list-style: none;
+  padding: 0;
+  z-index: 1;
+  display: block;
+}
+
+.swiper-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  display: flex;
+  transition-property: transform;
+  transition-timing-function: var(--swiper-wrapper-transition-timing-function, initial);
+  box-sizing: content-box;
+}
+
+.swiper-slide {
+  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transition-property: transform;
+  display: block;
+}
+
+.swiper-pagination {
+  position: absolute;
+  text-align: center;
+  transition: 0.3s opacity;
+  transform: translate3d(0, 0, 0);
+  z-index: 10;
+}
+
+.swiper-pagination.swiper-pagination-hidden {
+  opacity: 0;
+}
+
+.swiper-pagination-bullet {
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.2);
+  opacity: 0.2;
+  cursor: pointer;
+}
+
+.swiper-pagination-bullet-active {
+  opacity: 1;
+  background: var(--swiper-pagination-color, var(--swiper-theme-color));
+}
+
+.swiper-horizontal > .swiper-pagination-bullets {
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.swiper-pagination-bullets.swiper-pagination-horizontal {
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.swiper-pagination-bullets .swiper-pagination-bullet {
+  margin: 0 4px;
+}
+
+/* Swiper custom styles for ExecutionErrorDisplay */
+.error-swiper {
+  padding-bottom: 2rem;
+  width: 100%;
+  height: auto;
+}
+
+.error-swiper .swiper-wrapper {
+  height: auto;
+}
+
+.error-swiper .swiper-slide {
+  height: auto;
+  display: flex;
+  align-items: stretch;
+}
+
+.error-swiper .swiper-pagination {
+  bottom: 0;
+  position: relative;
+  margin-top: 1rem;
+}
+
+.error-swiper .swiper-pagination-bullet {
+  background: rgba(255, 255, 255, 0.3) !important;
+  width: 8px !important;
+  height: 8px !important;
+  opacity: 1 !important;
+  transition: all 0.2s ease !important;
+}
+
+.error-swiper .swiper-pagination-bullet-active {
+  background: rgba(255, 255, 255, 0.8) !important;
+  transform: scale(1.25) !important;
+}
+
+/* Ensure swiper container takes full width */
+.error-swiper .swiper {
+  width: 100%;
+  height: auto;
+}
+
+.error-swiper .swiper-container {
+  width: 100%;
+  height: auto;
+}

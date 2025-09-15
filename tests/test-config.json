@@ -1,0 +1,18 @@
+{
+  "server": {
+    "host": "localhost",
+    "port": 8188,
+    "protocol": "http"
+  },
+  "timeouts": {
+    "connection": 5000,
+    "execution": 30000
+  },
+  "environment": "development",
+  "description": "Test configuration for ComfyMobileUI integration tests",
+  "notes": [
+    "Update host and port to match your ComfyUI server",
+    "Default ComfyUI server runs on localhost:8188",
+    "Set protocol to 'https' if using SSL"
+  ]
+}

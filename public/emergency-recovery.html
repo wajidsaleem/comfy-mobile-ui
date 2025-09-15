@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#f8fafc">
+    <title>ComfyUI Mobile - Emergency Recovery</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e293b, #7c3aed, #1e293b);
+            color: #f1f5f9;
+            padding: 20px;
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 400px;
+            width: 100%;
+            background: rgba(51, 65, 85, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            text-align: center;
+        }
+        
+        h1 {
+            color: #60a5fa;
+            font-size: 24px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        .status {
+            background: rgba(71, 85, 105, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        
+        .success { 
+            background: rgba(16, 185, 129, 0.2); 
+            border-left: 4px solid #10b981; 
+        }
+        .error { 
+            background: rgba(239, 68, 68, 0.2); 
+            border-left: 4px solid #ef4444; 
+        }
+        .warning { 
+            background: rgba(245, 158, 11, 0.2); 
+            border-left: 4px solid #f59e0b; 
+        }
+        .info { 
+            background: rgba(96, 165, 250, 0.2); 
+            border-left: 4px solid #60a5fa; 
+        }
+        
+        button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin: 8px 4px;
+            transition: all 0.2s;
+            min-width: 140px;
+        }
+        
+        button:hover {
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        
+        button:disabled {
+            background: #64748b;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+            opacity: 0.6;
+        }
+        
+        button.secondary {
+            background: linear-gradient(135deg, #64748b, #475569);
+        }
+        
+        button.secondary:hover {
+            background: linear-gradient(135deg, #475569, #334155);
+        }
+        
+        button.danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+        
+        button.danger:hover {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff40;
+            border-radius: 50%;
+            border-top-color: #ffffff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .button-group {
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .info-text {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 15px;
+            line-height: 1.4;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(71, 85, 105, 0.8);
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛠️ Emergency Recovery</h1>
+        
+        <div class="status info" id="status">
+            <strong>App Recovery Tool</strong><br>
+            This tool helps recover from app loading issues while preserving your workflow data.
+        </div>
+        
+        <div class="progress-bar" id="progressBar" style="display: none;">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        
+        <div class="button-group">
+            <button onclick="checkAppStatus()" id="checkBtn">
+                🔍 Check App Status
+            </button>
+            
+            <button onclick="performRecovery()" id="recoveryBtn">
+                🔧 Auto Recovery
+            </button>
+            
+            <button onclick="clearAllStorage()" class="danger" id="clearBtn">
+                🗑️ Clear All Data
+            </button>
+            
+            <button onclick="refreshApp()" class="secondary" id="refreshBtn">
+                🔄 Refresh App
+            </button>
+        </div>
+        
+        <div class="info-text" id="infoText">
+            💡 Auto Recovery preserves your workflow data.<br>
+            Clear All Data removes everything including workflows.
+        </div>
+    </div>
+
+    <script>
+        let isProcessing = false;
+        
+        function log(message, type = 'info') {
+            const status = document.getElementById('status');
+            const colors = {
+                'success': 'success',
+                'error': 'error', 
+                'warning': 'warning',
+                'info': 'info'
+            };
+            status.className = `status ${colors[type] || 'info'}`;
+            status.innerHTML = `<strong>${getTypeIcon(type)} ${getTypeTitle(type)}</strong><br>${message}`;
+        }
+        
+        function getTypeIcon(type) {
+            const icons = {
+                'success': '✅',
+                'error': '❌',
+                'warning': '⚠️',
+                'info': 'ℹ️'
+            };
+            return icons[type] || 'ℹ️';
+        }
+        
+        function getTypeTitle(type) {
+            const titles = {
+                'success': 'Success',
+                'error': 'Error',
+                'warning': 'Warning', 
+                'info': 'Info'
+            };
+            return titles[type] || 'Info';
+        }
+        
+        function showProgress(show = true) {
+            document.getElementById('progressBar').style.display = show ? 'block' : 'none';
+        }
+        
+        function setProgress(percent) {
+            document.getElementById('progressFill').style.width = percent + '%';
+        }
+        
+        function disableButtons(disabled = true) {
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(btn => {
+                btn.disabled = disabled;
+                if (disabled) {
+                    btn.innerHTML = btn.innerHTML.replace('🔍', '').replace('🔧', '').replace('🗑️', '').replace('🔄', '').trim();
+                    if (btn.id === 'checkBtn' || btn.id === 'recoveryBtn') {
+                        btn.innerHTML = '<span class="spinner"></span>' + btn.innerHTML;
+                    }
+                }
+            });
+            isProcessing = disabled;
+        }
+        
+        async function checkAppStatus() {
+            if (isProcessing) return;
+            
+            disableButtons(true);
+            showProgress(true);
+            log('Checking app status...', 'info');
+            
+            try {
+                // Check if main app is accessible
+                setProgress(25);
+                const response = await fetch('/');
+                setProgress(50);
+                
+                if (response.ok) {
+                    log('App server is responding normally.', 'success');
+                    setProgress(75);
+                    
+                    // Check if JavaScript is loading
+                    setTimeout(() => {
+                        setProgress(100);
+                        log('Server is working. Try refreshing the app or check browser console for JavaScript errors.', 'warning');
+                        disableButtons(false);
+                        showProgress(false);
+                    }, 1000);
+                } else {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+                
+            } catch (error) {
+                setProgress(100);
+                log(`App server is not responding: ${error.message}`, 'error');
+                disableButtons(false);
+                showProgress(false);
+            }
+        }
+        
+        async function performRecovery() {
+            if (isProcessing) return;
+            
+            disableButtons(true);
+            showProgress(true);
+            log('Starting automatic recovery...', 'info');
+            
+            try {
+                setProgress(20);
+                
+                // Step 1: Backup IndexedDB
+                log('Backing up workflow data...', 'info');
+                const workflows = await backupIndexedDB();
+                setProgress(40);
+                
+                // Step 2: Clear problematic localStorage keys
+                log('Cleaning corrupted storage...', 'info');
+                const problematicKeys = [
+                    'comfy-mobile-connection',
+                    'comfyui_workflows', 
+                    'comfyui_seed_controls'
+                ];
+                
+                let clearedCount = 0;
+                problematicKeys.forEach(key => {
+                    if (localStorage.getItem(key)) {
+                        localStorage.removeItem(key);
+                        clearedCount++;
+                    }
+                });
+                setProgress(60);
+                
+                // Step 3: Clear sessionStorage
+                log('Clearing session data...', 'info');
+                sessionStorage.clear();
+                setProgress(80);
+                
+                // Step 4: Verify IndexedDB
+                const preservedWorkflows = await countIndexedDBWorkflows();
+                setProgress(100);
+                
+                log(`Recovery completed! ${preservedWorkflows} workflows preserved. App will refresh automatically.`, 'success');
+                
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 2000);
+                
+            } catch (error) {
+                setProgress(100);
+                log(`Recovery failed: ${error.message}`, 'error');
+                disableButtons(false);
+                showProgress(false);
+            }
+        }
+        
+        async function clearAllStorage() {
+            if (isProcessing) return;
+            
+            if (!confirm('⚠️ This will delete ALL data including workflows. Are you sure?')) {
+                return;
+            }
+            
+            disableButtons(true);
+            showProgress(true);
+            log('Clearing all storage data...', 'warning');
+            
+            try {
+                setProgress(25);
+                
+                // Clear localStorage
+                localStorage.clear();
+                setProgress(50);
+                
+                // Clear sessionStorage  
+                sessionStorage.clear();
+                setProgress(75);
+                
+                // Clear IndexedDB
+                await new Promise((resolve, reject) => {
+                    const deleteReq = indexedDB.deleteDatabase('ComfyMobileUI');
+                    deleteReq.onsuccess = () => resolve();
+                    deleteReq.onerror = () => reject(deleteReq.error);
+                    deleteReq.onblocked = () => reject(new Error('Database deletion blocked'));
+                });
+                setProgress(100);
+                
+                log('All data cleared successfully. App will refresh.', 'success');
+                
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 2000);
+                
+            } catch (error) {
+                setProgress(100);
+                log(`Failed to clear storage: ${error.message}`, 'error');
+                disableButtons(false);
+                showProgress(false);
+            }
+        }
+        
+        function refreshApp() {
+            if (isProcessing) return;
+            window.location.href = '/';
+        }
+        
+        // Helper functions for IndexedDB operations
+        async function backupIndexedDB() {
+            return new Promise((resolve) => {
+                try {
+                    const request = indexedDB.open('ComfyMobileUI', 1);
+                    
+                    request.onerror = () => resolve(0);
+                    request.onsuccess = () => {
+                        const db = request.result;
+                        
+                        if (!db.objectStoreNames.contains('workflows')) {
+                            resolve(0);
+                            return;
+                        }
+                        
+                        const transaction = db.transaction(['workflows'], 'readonly');
+                        const store = transaction.objectStore('workflows');
+                        const getAllRequest = store.getAll();
+                        
+                        getAllRequest.onsuccess = () => {
+                            const workflows = getAllRequest.result;
+                            if (workflows.length > 0) {
+                                localStorage.setItem(`__emergency_backup_${Date.now()}__`, JSON.stringify(workflows));
+                            }
+                            resolve(workflows.length);
+                        };
+                        
+                        getAllRequest.onerror = () => resolve(0);
+                    };
+                } catch (error) {
+                    resolve(0);
+                }
+            });
+        }
+        
+        async function countIndexedDBWorkflows() {
+            return new Promise((resolve) => {
+                try {
+                    const request = indexedDB.open('ComfyMobileUI', 1);
+                    
+                    request.onerror = () => resolve(0);
+                    request.onsuccess = () => {
+                        const db = request.result;
+                        
+                        if (!db.objectStoreNames.contains('workflows')) {
+                            resolve(0);
+                            return;
+                        }
+                        
+                        const transaction = db.transaction(['workflows'], 'readonly');
+                        const store = transaction.objectStore('workflows');
+                        const countRequest = store.count();
+                        
+                        countRequest.onsuccess = () => resolve(countRequest.result);
+                        countRequest.onerror = () => resolve(0);
+                    };
+                } catch (error) {
+                    resolve(0);
+                }
+            });
+        }
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Emergency Recovery Tool loaded. Click "Check App Status" to diagnose the issue.', 'info');
+        });
+    </script>
+</body>
+</html>
