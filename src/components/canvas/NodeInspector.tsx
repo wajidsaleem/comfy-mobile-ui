@@ -230,10 +230,10 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   };
 
   return (
-    <div 
-      className={`absolute bottom-0 left-0 right-0 z-50 bg-white/50 backdrop-blur-md border-t border-slate-200/40 shadow-2xl dark:bg-slate-900/50 dark:border-slate-700/40 max-h-[50vh] flex flex-col transition-all duration-300 ease-out ${
-        isNodePanelVisible 
-          ? 'transform translate-y-0 opacity-100' 
+    <div
+      className={`absolute bottom-0 left-0 right-0 z-50 bg-white/50 backdrop-blur-md border-t border-slate-200/40 shadow-2xl dark:bg-slate-900/50 dark:border-slate-700/40 max-h-[75vh] flex flex-col transition-all duration-300 ease-out ${
+        isNodePanelVisible
+          ? 'transform translate-y-0 opacity-100'
           : 'transform translate-y-full opacity-0'
       }`}
       style={{
