@@ -10,7 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-dev-dist
+dev-dists
 *.local
 
 # Editor directories and files
@@ -46,3 +46,7 @@ tests/output/
 # mcps
 .playwright-mcp/
 .taskmaster/
+
+#TODO
+TODO
+dev-dist/registerSW.js
