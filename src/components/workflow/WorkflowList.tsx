@@ -505,9 +505,16 @@ const WorkflowList: React.FC = () => {
   };
 
   const handleReorder = async (newOrder: Workflow[]) => {
-    setWorkflows(newOrder);
+    // Assign sortOrder values based on the new array position
+    const workflowsWithUpdatedOrder = newOrder.map((workflow, index) => ({
+      ...workflow,
+      sortOrder: index
+    }));
+
+    setWorkflows(workflowsWithUpdatedOrder);
     try {
-      await saveAllWorkflows(newOrder);
+      await saveAllWorkflows(workflowsWithUpdatedOrder);
+      console.log('✅ Workflow order saved successfully');
     } catch (error) {
       console.error('Failed to save reordered workflows:', error);
       toast.error('Failed to save workflow order');
