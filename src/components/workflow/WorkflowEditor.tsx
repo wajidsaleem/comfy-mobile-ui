@@ -486,7 +486,7 @@ const WorkflowEditor: React.FC = () => {
       } catch (error) {
         console.warn('Failed to check execution state for synthetic event:', error);
       }
-      
+
     } catch (error) {
       console.error('Failed to load workflow:', error);
       setError(error instanceof Error ? error.message : 'Failed to load workflow');
@@ -1308,114 +1308,150 @@ const WorkflowEditor: React.FC = () => {
     }
   }
 
-  const handleNodeRefresh = async (nodeId: number) => {
+  // Refresh node slots function - supports both single node and full workflow refresh
+  const refreshNodeSlots = async (nodeIds?: number[]) => {
     if (!workflow?.workflow_json || !comfyGraphRef.current || !objectInfo) {
       console.warn('No workflow, ComfyGraph, or objectInfo available');
-      toast.error('Cannot refresh node: missing required data');
+      toast.error('Cannot refresh nodes: missing required data');
       return;
     }
 
     try {
-      // Find the node in the workflow JSON
-      const currentNode = workflow.workflow_json.nodes?.find((n: any) => n.id === nodeId);
-      if (!currentNode) {
-        toast.error('Node not found');
+      // Determine which nodes to refresh
+      let targetNodeIds: number[];
+      if (nodeIds && nodeIds.length > 0) {
+        targetNodeIds = nodeIds;
+      } else {
+        // Refresh all nodes in the workflow
+        targetNodeIds = workflow.workflow_json.nodes?.map((n: any) => n.id) || [];
+      }
+
+      if (targetNodeIds.length === 0) {
+        toast.info('No nodes to refresh');
         return;
       }
 
-      const nodeType = currentNode.type;
-      if (!nodeType) {
-        toast.error('Cannot determine node type');
-        return;
-      }
+      let refreshedCount = 0;
+      let skippedCount = 0;
+      const updatedNodes = [...(workflow.workflow_json.nodes || [])];
 
-      // Get fresh metadata from objectInfo
-      const nodeMetadata = objectInfo[nodeType];
-      if (!nodeMetadata) {
-        toast.error(`Node type "${nodeType}" not found on server`);
-        return;
-      }
-
-      // Get existing slots to preserve connections
-      const existingInputs = currentNode.inputs || [];
-      const existingOutputs = currentNode.outputs || [];
-
-      // Create fresh template slots from metadata
-      const templateInputs = createInputSlots(nodeMetadata.input || {}, nodeMetadata.input_order);
-      const templateOutputs = createOutputSlots(
-        nodeMetadata.output || [],
-        nodeMetadata.output_name || []
-      );
-
-      // Simple merge: if slot with same name exists, keep existing one completely
-      const existingInputsByName = new Map(existingInputs.map(slot => [slot.name, slot]));
-      const existingOutputsByName = new Map(existingOutputs.map(slot => [slot.name, slot]));
-      
-      const mergedInputs = templateInputs.map(templateSlot => {
-        const existingSlot = existingInputsByName.get(templateSlot.name);
-        if (existingSlot) {
-          // Keep existing slot completely unchanged
-          return existingSlot;
+      // Process each target node
+      for (const nodeId of targetNodeIds) {
+        const currentNode = updatedNodes.find((n: any) => n.id === nodeId);
+        if (!currentNode) {
+          console.warn(`Node ${nodeId} not found in workflow`);
+          skippedCount++;
+          continue;
         }
-        return templateSlot; // Use new template slot
-      });
 
-      const mergedOutputs = templateOutputs.map(templateSlot => {
-        const existingSlot = existingOutputsByName.get(templateSlot.name);
-        if (existingSlot) {
-          // Keep existing slot completely unchanged
-          return existingSlot;
+        const nodeType = currentNode.type;
+        if (!nodeType) {
+          console.warn(`Node ${nodeId} has no type`);
+          skippedCount++;
+          continue;
         }
-        return templateSlot; // Use new template slot
-      });
 
-      // Update the node in workflow JSON
-      const updatedNodes = workflow.workflow_json.nodes?.map((node: any) => {
-        if (node.id === nodeId) {
-          return {
-            ...node,
+        // Get fresh metadata from objectInfo
+        const nodeMetadata = objectInfo[nodeType];
+        if (!nodeMetadata) {
+          console.warn(`Node type "${nodeType}" not found on server`);
+          skippedCount++;
+          continue;
+        }
+
+        // Get existing slots to preserve connections
+        const existingInputs = currentNode.inputs || [];
+        const existingOutputs = currentNode.outputs || [];
+
+        // Create fresh template slots from metadata
+        const templateInputs = createInputSlots(nodeMetadata.input || {}, nodeMetadata.input_order);
+        const templateOutputs = createOutputSlots(
+          nodeMetadata.output || [],
+          nodeMetadata.output_name || []
+        );
+
+        // Simple merge: if slot with same name exists, keep existing one completely
+        const existingInputsByName = new Map(existingInputs.map(slot => [slot.name, slot]));
+        const existingOutputsByName = new Map(existingOutputs.map(slot => [slot.name, slot]));
+
+        const mergedInputs = templateInputs.map(templateSlot => {
+          const existingSlot = existingInputsByName.get(templateSlot.name);
+          if (existingSlot) {
+            // Keep existing slot completely unchanged
+            return existingSlot;
+          }
+          return templateSlot; // Use new template slot
+        });
+
+        const mergedOutputs = templateOutputs.map(templateSlot => {
+          const existingSlot = existingOutputsByName.get(templateSlot.name);
+          if (existingSlot) {
+            // Keep existing slot completely unchanged
+            return existingSlot;
+          }
+          return templateSlot; // Use new template slot
+        });
+
+        // Update the node in the nodes array
+        const nodeIndex = updatedNodes.findIndex((n: any) => n.id === nodeId);
+        if (nodeIndex !== -1) {
+          updatedNodes[nodeIndex] = {
+            ...updatedNodes[nodeIndex],
             inputs: mergedInputs,
             outputs: mergedOutputs
           };
+          refreshedCount++;
         }
-        return node;
-      });
 
-      // Update workflow JSON
+        // Update ComfyGraph node
+        const graphNode = comfyGraphRef.current._nodes?.find((n: any) => n.id === nodeId);
+        if (graphNode) {
+          graphNode.inputs = mergedInputs;
+          graphNode.outputs = mergedOutputs;
+        }
+      }
+
+      // Update workflow JSON with all changes
       const updatedWorkflowJson = {
         ...workflow.workflow_json,
         nodes: updatedNodes
       };
-
-      // Update ComfyGraph node
-      const graphNode = comfyGraphRef.current._nodes?.find((n: any) => n.id === nodeId);
-      if (graphNode) {
-        graphNode.inputs = mergedInputs;
-        graphNode.outputs = mergedOutputs;
-      }
 
       // Save the updated workflow
       const updatedWorkflow = {
         ...workflow,
         workflow_json: updatedWorkflowJson
       };
-      
+
       await updateWorkflow(updatedWorkflow);
       setWorkflow(updatedWorkflow);
 
-      setIsNodePanelVisible(false);
-      setSelectedNode(null);
-      
+      // Close node panel if it was a single node refresh
+      if (nodeIds && nodeIds.length === 1) {
+        setIsNodePanelVisible(false);
+        setSelectedNode(null);
+      }
+
       // Reload the workflow to ensure all systems are synchronized
       await loadWorkflow();
-      
-      toast.success(`Node ${nodeId} slots refreshed successfully`);
-      
+
+      // Show appropriate success message
+      if (nodeIds && nodeIds.length === 1) {
+        toast.success(`Node ${nodeIds[0]} slots refreshed successfully`);
+      } else {
+        toast.success(`Workflow refreshed: ${refreshedCount} nodes updated` +
+          (skippedCount > 0 ? `, ${skippedCount} nodes skipped` : ''));
+      }
+
     } catch (error) {
-      console.error('Failed to refresh node:', error);
+      console.error('Failed to refresh node slots:', error);
       toast.error('Failed to refresh node slots');
     }
-  }
+  };
+
+  const handleNodeRefresh = async (nodeId: number) => {
+    await refreshNodeSlots([nodeId]);
+  };
 
   
   // Get current node mode (for group mode analysis)
@@ -1662,6 +1698,7 @@ const WorkflowEditor: React.FC = () => {
           onZoomFit={canvasInteraction.handleZoomFit}
           onShowWorkflowJson={handleShowWorkflowJson}
           onShowObjectInfo={handleShowObjectInfo}
+          onRefreshWorkflow={() => refreshNodeSlots()}
           repositionMode={{
             isActive: canvasInteraction.repositionMode.isActive
           }}

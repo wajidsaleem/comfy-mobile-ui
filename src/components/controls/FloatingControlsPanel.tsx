@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, Clock, Search, Maximize2, Move } from 'lucide-react';
+import { Settings, Clock, Search, Maximize2, Move, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePromptHistoryStore } from '@/ui/store/promptHistoryStore';
@@ -17,6 +17,7 @@ interface FloatingControlsPanelProps {
   onZoomFit?: () => void;
   onShowWorkflowJson?: () => void;
   onShowObjectInfo?: () => void;
+  onRefreshWorkflow?: () => void;
   // Repositioning mode controls (for passing to SettingsDropdown)
   repositionMode?: {
     isActive: boolean;
@@ -37,6 +38,7 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
   onZoomFit,
   onShowWorkflowJson,
   onShowObjectInfo,
+  onRefreshWorkflow,
   repositionMode,
   onToggleRepositionMode,
   connectionMode,
@@ -300,7 +302,7 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
         {/* Gradient Overlay for Enhanced Glass Effect */}
         <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-slate-900/10 pointer-events-none rounded-xl" />
         {/* Workflow Controls Container */}
-        <div className="flex items-center space-x-1 relative z-10">          
+        <div className="flex items-center space-x-1 relative z-10">
 
           {/* Search Node Button */}
           <div className="relative" ref={searchRef}>
@@ -345,6 +347,22 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
           {/* Divider */}
           <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
 
+          {/* Refresh Workflow Button */}
+          {onRefreshWorkflow && (
+            <Button
+              onClick={onRefreshWorkflow}
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 hover:bg-white/60 dark:hover:bg-slate-700/60"
+              title="Refresh Workflow Slots"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          )}
+
+          {/* Divider */}
+          <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
+
           {/* Fit to Screen Button */}
           {onZoomFit && (
             <>
@@ -376,7 +394,7 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
 
           {/* Divider */}
           <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
-          
+
           {/* Settings Button with Dropdown */}
           <div className="relative" ref={settingsRef}>
             <Button
