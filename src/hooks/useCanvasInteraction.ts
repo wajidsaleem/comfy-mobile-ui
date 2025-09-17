@@ -15,10 +15,9 @@ interface TouchStartInfo {
   y: number;
   identifier: number;
   startTime: number;
-  startScreenX: number;
-  startScreenY: number;
   touchedNode?: WorkflowNode | null;
   touchedGroup?: GroupBounds | null;
+  initialViewport: { x: number; y: number };
 }
 
 interface LongPressState {
@@ -171,8 +170,8 @@ export const useCanvasInteraction = ({
   const LONG_PRESS_DURATION = 1000; // 1 second
   const PROGRESS_DELAY = 300; // 0.3 seconds before showing progress
   const PROGRESS_ANIMATION_DURATION = 700; // 0.7 seconds of visible animation (1000 - 300)
-  const LONG_PRESS_TOLERANCE = 30; // pixels - increased for mobile finger precision
-  const DRAG_THRESHOLD = 15; // pixels - movement threshold to start drag
+  const LONG_PRESS_TOLERANCE = 8; // pixels
+  const DRAG_THRESHOLD = 8; // pixels
 
   // Long press utility functions
   const clearLongPress = useCallback(() => {
@@ -383,19 +382,19 @@ export const useCanvasInteraction = ({
       }
     }
 
-    // Check if we should start dragging
-    const deltaX = Math.abs(e.clientX - mouseDownInfo.x);
-    const deltaY = Math.abs(e.clientY - mouseDownInfo.y);
-    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    
-    // If moved more than threshold pixels and long press is not active, we're dragging
-    const shouldDrag = distance > DRAG_THRESHOLD && !longPressState.isActive;
-    
-    if (shouldDrag) {
-      // Update isDragging state if not already dragging
-      if (!isDragging) {
+    // Start dragging
+    if (!isDragging && !longPressState.isActive) {
+      const deltaX = Math.abs(e.clientX - mouseDownInfo.x);
+      const deltaY = Math.abs(e.clientY - mouseDownInfo.y);
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      if (distance > DRAG_THRESHOLD) {
         setIsDragging(true);
       }
+    }
+
+    // Continue dragging if already started
+    if (isDragging) {
       
       // Check if we're in repositioning mode with a selected node or group
       if (repositionMode.isActive && repositionMode.originalPosition) {
@@ -414,18 +413,17 @@ export const useCanvasInteraction = ({
           const newX = repositionMode.originalPosition[0] + worldDeltaX;
           const newY = repositionMode.originalPosition[1] + worldDeltaY;
 
-          // Apply grid snap if enabled
-          const snappedX = snapToGrid(newX);
-          const snappedY = snapToGrid(newY);
+          // Apply smooth position calculation
+          const [finalX, finalY] = calculateSmoothPosition(newX, newY);
 
           // Update the repositioning mode state with new position
           setRepositionMode(prev => ({
             ...prev,
-            currentPosition: [snappedX, snappedY]
+            currentPosition: [finalX, finalY]
           }));
 
           // Update node position in bounds for real-time rendering
-          updateNodePositionInBounds(repositionMode.selectedNodeId, snappedX, snappedY);
+          updateNodePositionInBounds(repositionMode.selectedNodeId, finalX, finalY);
         } else if (repositionMode.selectedGroupId && mouseDownInfo.clickedGroup?.id === repositionMode.selectedGroupId) {
           // Repositioning mode - move the selected group using relative movement
           
@@ -441,18 +439,17 @@ export const useCanvasInteraction = ({
           const newX = repositionMode.originalPosition[0] + worldDeltaX;
           const newY = repositionMode.originalPosition[1] + worldDeltaY;
 
-          // Apply grid snap if enabled
-          const snappedX = snapToGrid(newX);
-          const snappedY = snapToGrid(newY);
+          // Apply smooth position calculation
+          const [finalX, finalY] = calculateSmoothPosition(newX, newY);
 
           // Update the repositioning mode state with new position
           setRepositionMode(prev => ({
             ...prev,
-            currentPosition: [snappedX, snappedY]
+            currentPosition: [finalX, finalY]
           }));
 
           // Update group position in bounds for real-time rendering
-          updateGroupPositionInBounds(repositionMode.selectedGroupId, snappedX, snappedY);
+          updateGroupPositionInBounds(repositionMode.selectedGroupId, finalX, finalY);
         }
       } else {
         // Normal mode - move the viewport/canvas
@@ -646,15 +643,14 @@ export const useCanvasInteraction = ({
       }
 
       // Store touch information without immediately selecting node
-      setTouchStart({ 
-        x: touch.clientX - viewport.x, 
-        y: touch.clientY - viewport.y,
+      setTouchStart({
+        x: touch.clientX,
+        y: touch.clientY,
         identifier: touch.identifier,
         startTime: Date.now(),
-        startScreenX: touch.clientX,
-        startScreenY: touch.clientY,
         touchedNode: touchedNode,
-        touchedGroup: touchedGroup
+        touchedGroup: touchedGroup,
+        initialViewport: { x: viewport.x, y: viewport.y }
       });
 
       // Start long press timer (only if not in repositioning mode)
@@ -720,105 +716,85 @@ export const useCanvasInteraction = ({
     if (e.touches.length === 1 && touchStart) {
       // Single touch drag
       const touch = Array.from(e.touches).find(t => t.identifier === touchStart.identifier);
-      if (touch) {
-        // Check if user has moved significantly - if so, handle drag accordingly
-        if (touchStart.touchedNode || touchStart.touchedGroup) {
-          const deltaX = Math.abs(touch.clientX - touchStart.startScreenX);
-          const deltaY = Math.abs(touch.clientY - touchStart.startScreenY);
-          const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-          
-          // If moved more than threshold pixels, handle as drag (but not if long press is still active)
-          if (distance > DRAG_THRESHOLD && !longPressState.isActive) {
-            // Check if we're in repositioning mode with any node or group selected
-            if (repositionMode.isActive && repositionMode.originalPosition) {
-              // Handle node repositioning - check if we have a selected node and are touching the same node
-              if (repositionMode.selectedNodeId && touchStart.touchedNode?.id === repositionMode.selectedNodeId) {
-                // Calculate touch movement delta from touch start position
-                const deltaX = touch.clientX - touchStart.startScreenX;
-                const deltaY = touch.clientY - touchStart.startScreenY;
+      if (!touch) return;
 
-                // Convert delta to world coordinates (accounting for scale)
-                const worldDeltaX = deltaX / viewport.scale;
-                const worldDeltaY = deltaY / viewport.scale;
+      // Start dragging if not already dragging and moved beyond threshold 
+      if (!isDragging && !longPressState.isActive) {
+        const deltaX = Math.abs(touch.clientX - touchStart.x);
+        const deltaY = Math.abs(touch.clientY - touchStart.y);
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
-                // Calculate new node position based on original position + delta
-                const newX = repositionMode.originalPosition[0] + worldDeltaX;
-                const newY = repositionMode.originalPosition[1] + worldDeltaY;
+        if (distance > DRAG_THRESHOLD) {
+          setIsDragging(true);
+        }
+      }
 
-                // Apply grid snap if enabled
-                const snappedX = snapToGrid(newX);
-                const snappedY = snapToGrid(newY);
+      // Continue dragging if already started 
+      if (isDragging) {
+        // Check if we're in repositioning mode with a selected node or group
+        if (repositionMode.isActive && repositionMode.originalPosition) {
+          if (repositionMode.selectedNodeId && touchStart.touchedNode?.id === repositionMode.selectedNodeId) {
+            // Repositioning mode - move the selected node using relative movement 
 
-                // Update the repositioning mode state with new position
-                setRepositionMode(prev => ({
-                  ...prev,
-                  currentPosition: [snappedX, snappedY]
-                }));
+            // Calculate movement delta from touch start position
+            const deltaX = touch.clientX - touchStart.x;
+            const deltaY = touch.clientY - touchStart.y;
 
-                // Update node position in bounds for real-time rendering
-                updateNodePositionInBounds(repositionMode.selectedNodeId, snappedX, snappedY);
-              } 
-              // Handle group repositioning - check if we have a selected group and are touching the same group
-              else if (repositionMode.selectedGroupId && touchStart.touchedGroup?.id === repositionMode.selectedGroupId) {
-                // Calculate touch movement delta from touch start position
-                const deltaX = touch.clientX - touchStart.startScreenX;
-                const deltaY = touch.clientY - touchStart.startScreenY;
+            // Convert delta to world coordinates (accounting for scale)
+            const worldDeltaX = deltaX / viewport.scale;
+            const worldDeltaY = deltaY / viewport.scale;
 
-                // Convert delta to world coordinates (accounting for scale)
-                const worldDeltaX = deltaX / viewport.scale;
-                const worldDeltaY = deltaY / viewport.scale;
+            // Calculate new node position based on original position + delta
+            const newX = repositionMode.originalPosition[0] + worldDeltaX;
+            const newY = repositionMode.originalPosition[1] + worldDeltaY;
 
-                // Calculate new group position based on original position + delta
-                const newX = repositionMode.originalPosition[0] + worldDeltaX;
-                const newY = repositionMode.originalPosition[1] + worldDeltaY;
+            // Apply smooth position calculation
+            const [finalX, finalY] = calculateSmoothPosition(newX, newY);
 
-                // Apply grid snap if enabled
-                const snappedX = snapToGrid(newX);
-                const snappedY = snapToGrid(newY);
+            // Update the repositioning mode state with new position
+            setRepositionMode(prev => ({
+              ...prev,
+              currentPosition: [finalX, finalY]
+            }));
 
-                // Update the repositioning mode state with new position
-                setRepositionMode(prev => ({
-                  ...prev,
-                  currentPosition: [snappedX, snappedY]
-                }));
+            // Update node position in bounds for real-time rendering
+            updateNodePositionInBounds(repositionMode.selectedNodeId, finalX, finalY);
+          } else if (repositionMode.selectedGroupId && touchStart.touchedGroup?.id === repositionMode.selectedGroupId) {
+            // Repositioning mode - move the selected group using relative movement 
 
-                // Update group position in bounds for real-time rendering
-                updateGroupPositionInBounds(repositionMode.selectedGroupId, snappedX, snappedY);
-              } else {
-                // Cancel selection and drag canvas instead
-                setTouchStart({
-                  ...touchStart,
-                  touchedNode: null,
-                  touchedGroup: null
-                });
-                
-                setViewport({
-                  ...viewport,
-                  x: touch.clientX - touchStart.x,
-                  y: touch.clientY - touchStart.y
-                });
-              }
-            } else {
-              // Normal mode or not selected for repositioning - cancel node/group selection and drag canvas
-              setTouchStart({
-                ...touchStart,
-                touchedNode: null,
-                touchedGroup: null
-              });
-              
-              setViewport({
-                ...viewport,
-                x: touch.clientX - touchStart.x,
-                y: touch.clientY - touchStart.y
-              });
-            }
+            // Calculate movement delta from touch start position
+            const deltaX = touch.clientX - touchStart.x;
+            const deltaY = touch.clientY - touchStart.y;
+
+            // Convert delta to world coordinates (accounting for scale)
+            const worldDeltaX = deltaX / viewport.scale;
+            const worldDeltaY = deltaY / viewport.scale;
+
+            // Calculate new group position based on original position + delta
+            const newX = repositionMode.originalPosition[0] + worldDeltaX;
+            const newY = repositionMode.originalPosition[1] + worldDeltaY;
+
+            // Apply smooth position calculation
+            const [finalX, finalY] = calculateSmoothPosition(newX, newY);
+
+            // Update the repositioning mode state with new position
+            setRepositionMode(prev => ({
+              ...prev,
+              currentPosition: [finalX, finalY]
+            }));
+
+            // Update group position in bounds for real-time rendering
+            updateGroupPositionInBounds(repositionMode.selectedGroupId, finalX, finalY);
           }
         } else {
-          // No touched node or group - normal viewport drag
+          // Normal mode - move the viewport/canvas 
+          const deltaX = touch.clientX - touchStart.x;
+          const deltaY = touch.clientY - touchStart.y;
+
           setViewport({
             ...viewport,
-            x: touch.clientX - touchStart.x,
-            y: touch.clientY - touchStart.y
+            x: touchStart.initialViewport.x + deltaX,
+            y: touchStart.initialViewport.y + deltaY
           });
         }
       }
@@ -856,7 +832,7 @@ export const useCanvasInteraction = ({
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
     e.preventDefault();
-    
+
     // Update active touch count and last touch time
     setActiveTouchCount(e.touches.length);
     setLastTouchTime(Date.now());
@@ -878,17 +854,18 @@ export const useCanvasInteraction = ({
         );
         
         if (lastTouch) {
-          const deltaX = Math.abs(lastTouch.clientX - touchStart.startScreenX);
-          const deltaY = Math.abs(lastTouch.clientY - touchStart.startScreenY);
+          const deltaX = Math.abs(lastTouch.clientX - touchStart.x);
+          const deltaY = Math.abs(lastTouch.clientY - touchStart.y);
           const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
           
           // Consider it a tap if:
           // 1. Duration is less than 500ms
           // 2. Movement is less than 10 pixels
+          // 3. Not currently dragging
           const isShortTap = duration < 500;
           const isSmallMovement = distance < 10;
-          
-          if (isShortTap && isSmallMovement) {
+
+          if (isShortTap && isSmallMovement && !isDragging) {
             // Handle node/group selection
             if (touchStart.touchedNode) {
               if (repositionMode.isActive) {
@@ -959,21 +936,23 @@ export const useCanvasInteraction = ({
           }
         }
       }
-      
+
+      // Clean up dragging state when all touches end
+      setIsDragging(false);
       setTouchStart(null);
       setPinchDistance(null);
     } else if (e.touches.length === 1) {
       // Reset to single touch
       setPinchDistance(null);
       const touch = e.touches[0];
-      setTouchStart({ 
-        x: touch.clientX - viewport.x, 
-        y: touch.clientY - viewport.y,
+      setTouchStart({
+        x: touch.clientX,
+        y: touch.clientY,
         identifier: touch.identifier,
         startTime: Date.now(),
-        startScreenX: touch.clientX,
-        startScreenY: touch.clientY,
-        touchedNode: null // Reset touched node for continuing gesture
+        touchedNode: null, // Reset touched node for continuing gesture
+        touchedGroup: null,
+        initialViewport: { x: viewport.x, y: viewport.y }
       });
     }
   };
@@ -1067,12 +1046,27 @@ export const useCanvasInteraction = ({
   };
 
   // Grid snap utility function
-  const snapToGrid = (position: number, gridSize: number = 20, snapDistance: number = 10): number => {
+  const snapToGrid = (position: number, gridSize: number = 20, snapDistance: number = 15): number => {
     if (!repositionMode.gridSnapEnabled) return position;
-    
+
     const nearestGrid = Math.round(position / gridSize) * gridSize;
     const distance = Math.abs(position - nearestGrid);
+
+    // Use a larger snap distance and smoother transition
     return distance <= snapDistance ? nearestGrid : position;
+  };
+
+  // Smooth position calculation that reduces stuttering
+  const calculateSmoothPosition = (newX: number, newY: number): [number, number] => {
+    if (!repositionMode.gridSnapEnabled) {
+      return [newX, newY];
+    }
+
+    // Apply grid snap with improved logic
+    const snappedX = snapToGrid(newX);
+    const snappedY = snapToGrid(newY);
+
+    return [snappedX, snappedY];
   };
 
   // Update node position in nodeBounds for real-time rendering
@@ -1081,6 +1075,15 @@ export const useCanvasInteraction = ({
       const newBounds = new Map(prevBounds);
       const bounds = newBounds.get(nodeId);
       if (!bounds) return prevBounds;
+
+      // Check if position actually changed to avoid unnecessary updates
+      const currentX = bounds.x;
+      const currentY = bounds.y;
+      const threshold = 0.5; // Minimum movement threshold to reduce micro-updates
+
+      if (Math.abs(x - currentX) < threshold && Math.abs(y - currentY) < threshold) {
+        return prevBounds; // Skip update if movement is too small
+      }
 
       // Update the node bounds for real-time rendering
       const updatedBounds = {
@@ -1162,9 +1165,17 @@ export const useCanvasInteraction = ({
       const groupIndex = newBounds.findIndex(g => g.id === groupId);
       if (groupIndex === -1) return prevBounds;
 
+      const currentGroup = newBounds[groupIndex];
+      const threshold = 0.5; // Minimum movement threshold to reduce micro-updates
+
+      // Check if position actually changed to avoid unnecessary updates
+      if (Math.abs(x - currentGroup.x) < threshold && Math.abs(y - currentGroup.y) < threshold) {
+        return prevBounds; // Skip update if movement is too small
+      }
+
       // Update the group bounds for real-time rendering
       newBounds[groupIndex] = {
-        ...newBounds[groupIndex],
+        ...currentGroup,
         x: x,
         y: y
       };
