@@ -114,17 +114,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
     const excludedNames = ['clip_name', 'ckpt_name', 'model_name', 'lora_name', 'vae_name', 'upscale_model_name', 'controlnet_name'];
     if (excludedNames.includes(name)) {
       return null;
-    }
-    
-    // Check parameter name for image keywords
-    if (name.includes('image') || name.includes('img') || name.includes('picture') || name.includes('photo')) {
-      return 'IMAGE';
-    }
-    
-    // Check parameter name for video keywords (excluding 'clip' which is often used for CLIP models)
-    if (name.includes('video') || name.includes('movie') || name.includes('mp4')) {
-      return 'VIDEO';
-    }
+    }  
     
     // Check possible values for image extensions
     const hasImageExtensions = possibleValues.some((value: any) => {
