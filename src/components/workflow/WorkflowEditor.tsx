@@ -1370,27 +1370,29 @@ const WorkflowEditor: React.FC = () => {
           nodeMetadata.output_name || []
         );
 
-        // Simple merge: if slot with same name exists, keep existing one completely
+        // merge: preserve all existing slots and add new template slots
         const existingInputsByName = new Map(existingInputs.map(slot => [slot.name, slot]));
         const existingOutputsByName = new Map(existingOutputs.map(slot => [slot.name, slot]));
+        const templateInputsByName = new Map(templateInputs.map(slot => [slot.name, slot]));
+        const templateOutputsByName = new Map(templateOutputs.map(slot => [slot.name, slot]));
 
-        const mergedInputs = templateInputs.map(templateSlot => {
-          const existingSlot = existingInputsByName.get(templateSlot.name);
-          if (existingSlot) {
-            // Keep existing slot completely unchanged
-            return existingSlot;
+        // Start with existing inputs and add new template inputs
+        const mergedInputs = [...existingInputs];
+        for (const templateSlot of templateInputs) {
+          if (!existingInputsByName.has(templateSlot.name)) {
+            // Add new slot from template if it doesn't exist
+            mergedInputs.push(templateSlot);
           }
-          return templateSlot; // Use new template slot
-        });
+        }
 
-        const mergedOutputs = templateOutputs.map(templateSlot => {
-          const existingSlot = existingOutputsByName.get(templateSlot.name);
-          if (existingSlot) {
-            // Keep existing slot completely unchanged
-            return existingSlot;
+        // Start with existing outputs and add new template outputs
+        const mergedOutputs = [...existingOutputs];
+        for (const templateSlot of templateOutputs) {
+          if (!existingOutputsByName.has(templateSlot.name)) {
+            // Add new slot from template if it doesn't exist
+            mergedOutputs.push(templateSlot);
           }
-          return templateSlot; // Use new template slot
-        });
+        }
 
         // Update the node in the nodes array
         const nodeIndex = updatedNodes.findIndex((n: any) => n.id === nodeId);
