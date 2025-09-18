@@ -5,6 +5,7 @@ import { ArrowLeft, RotateCcw, Loader2, CheckCircle, XCircle, Server, AlertCircl
 import { useNavigate } from 'react-router-dom';
 import { useConnectionStore } from '@/ui/store/connectionStore';
 import ComfyUIService from '@/infrastructure/api/ComfyApiClient';
+import { globalWebSocketService } from '@/infrastructure/websocket/GlobalWebSocketService';
 
 interface ServerRebootProps {
   onBack?: () => void;
@@ -399,6 +400,9 @@ const ServerReboot: React.FC<ServerRebootProps> = ({ onBack }) => {
 
     // immediately set connection status to down when reboot starts
     disconnect();
+
+    // Clear execution state buffer to prevent stale execution state after reboot
+    globalWebSocketService.clearExecutionStateBuffer();
 
     try {
       let success = false;

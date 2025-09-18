@@ -155,6 +155,15 @@ class GlobalWebSocketService extends EventEmitter {
   }
 
   /**
+   * Clear execution state buffer
+   * Used when server is disconnected or rebooted to prevent stale execution state
+   */
+  clearExecutionStateBuffer(): void {
+    this.executionStateBuffer = [];
+    console.log(`🧹 [GlobalWebSocketService] Execution state buffer cleared`);
+  }
+
+  /**
    * Get current execution state info from buffer
    * Returns the most recent execution state information
    */

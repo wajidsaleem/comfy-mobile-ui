@@ -87,8 +87,12 @@ export const useConnectionStore = create<ConnectionStore>()(
         disconnect: () => {
           // Disconnect both HTTP and WebSocket
           get().disconnectWebSocket();
-          set({ 
-            isConnected: false, 
+
+          // Clear execution state buffer to prevent stale execution state
+          globalWebSocketService.clearExecutionStateBuffer();
+
+          set({
+            isConnected: false,
             lastPingTime: null,
             error: null,
             hasExtension: false,
