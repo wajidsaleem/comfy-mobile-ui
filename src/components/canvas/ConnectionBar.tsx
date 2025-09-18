@@ -83,19 +83,19 @@ export const ConnectionBar: React.FC<ConnectionBarProps> = ({
                     }}
                     disabled={!sourceNode}
                     className={`
-                      w-full relative rounded-2xl border-2 border-dashed h-16 flex items-center justify-center transition-all duration-200
-                      ${sourceNode 
-                        ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 cursor-pointer' 
+                      w-full relative rounded-2xl border-2 border-dashed min-h-16 flex items-center justify-center transition-all duration-200 py-2
+                      ${sourceNode
+                        ? 'border-blue-400 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 cursor-pointer'
                         : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 cursor-default'
                       }
                     `}
                   >
                     {sourceNode ? (
-                      <div className="text-center px-2">
-                        <div className="text-sm font-medium text-blue-700 dark:text-blue-300 truncate">
+                      <div className="text-center px-2 w-full">
+                        <div className="text-sm font-medium text-blue-700 dark:text-blue-300 break-all leading-tight">
                           {sourceNode.type}
                         </div>
-                        <div className="text-xs text-blue-600 dark:text-blue-400">
+                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                           ID: {sourceNode.id} • Click to clear
                         </div>
                       </div>
@@ -144,19 +144,19 @@ export const ConnectionBar: React.FC<ConnectionBarProps> = ({
                     }}
                     disabled={!targetNode}
                     className={`
-                      w-full relative rounded-2xl border-2 border-dashed h-16 flex items-center justify-center transition-all duration-200
-                      ${targetNode 
-                        ? 'border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 cursor-pointer' 
+                      w-full relative rounded-2xl border-2 border-dashed min-h-16 flex items-center justify-center transition-all duration-200 py-2
+                      ${targetNode
+                        ? 'border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 cursor-pointer'
                         : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 cursor-default'
                       }
                     `}
                   >
                     {targetNode ? (
-                      <div className="text-center px-2">
-                        <div className="text-sm font-medium text-red-700 dark:text-red-300 truncate">
+                      <div className="text-center px-2 w-full">
+                        <div className="text-sm font-medium text-red-700 dark:text-red-300 break-all leading-tight">
                           {targetNode.type}
                         </div>
-                        <div className="text-xs text-red-600 dark:text-red-400">
+                        <div className="text-xs text-red-600 dark:text-red-400 mt-1">
                           ID: {targetNode.id} • Click to clear
                         </div>
                       </div>
