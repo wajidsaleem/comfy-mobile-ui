@@ -94,10 +94,10 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                       SOURCE
                     </div>
                     <div className="px-3 py-2 bg-blue-100/50 dark:bg-blue-900/20 backdrop-blur-sm rounded-xl border border-blue-200/50 dark:border-blue-800/50">
-                      <div className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                      <div className="text-sm font-medium text-blue-800 dark:text-blue-200 break-all leading-tight">
                         {sourceNode.type}
                       </div>
-                      <div className="text-xs text-blue-600 dark:text-blue-400">
+                      <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                         ID: {sourceNode.id}
                       </div>
                     </div>
@@ -116,10 +116,10 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                       TARGET
                     </div>
                     <div className="px-3 py-2 bg-red-100/50 dark:bg-red-900/20 backdrop-blur-sm rounded-xl border border-red-200/50 dark:border-red-800/50">
-                      <div className="text-sm font-medium text-red-800 dark:text-red-200">
+                      <div className="text-sm font-medium text-red-800 dark:text-red-200 break-all leading-tight">
                         {targetNode.type}
                       </div>
-                      <div className="text-xs text-red-600 dark:text-red-400">
+                      <div className="text-xs text-red-600 dark:text-red-400 mt-1">
                         ID: {targetNode.id}
                       </div>
                     </div>
@@ -153,8 +153,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                         >
                         <div className="flex items-center justify-between">
                           {/* Source Slot */}
-                          <div className="flex-1 text-left">
-                            <div className={`text-sm font-medium ${
+                          <div className="flex-1 text-left min-w-0">
+                            <div className={`text-sm font-medium break-all leading-tight ${
                               isNameMatch
                                 ? 'text-green-800 dark:text-green-200 bg-green-100/60 dark:bg-green-900/40 px-2 py-1 rounded-md border border-green-300/40 dark:border-green-600/40 inline-block'
                                 : 'text-slate-800 dark:text-slate-200'
@@ -167,9 +167,9 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                           </div>
 
                           {/* Connection Type & Arrow */}
-                          <div className="flex items-center space-x-3 px-4">
+                          <div className="flex items-center space-x-3 px-4 flex-shrink-0">
                             <div className="px-2 py-1 bg-purple-100/50 dark:bg-purple-900/20 backdrop-blur-sm rounded-lg border border-purple-200/50 dark:border-purple-800/50">
-                              <div className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                              <div className="text-xs font-medium text-purple-700 dark:text-purple-300 break-all leading-tight">
                                 {displayType}
                               </div>
                             </div>
@@ -177,8 +177,8 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                           </div>
 
                           {/* Target Slot */}
-                          <div className="flex-1 text-right">
-                            <div className={`text-sm font-medium ${
+                          <div className="flex-1 text-right min-w-0">
+                            <div className={`text-sm font-medium break-all leading-tight ${
                               isNameMatch
                                 ? 'text-green-800 dark:text-green-200 bg-green-100/60 dark:bg-green-900/40 px-2 py-1 rounded-md border border-green-300/40 dark:border-green-600/40 inline-block'
                                 : 'text-slate-800 dark:text-slate-200'
