@@ -1381,26 +1381,76 @@ function filterOutVirtualNodes(workingGraph: any) {
 
 /**
  * Process widget values using proper widget-input mapping logic
- * This function handles the complex relationship between widgets_values and inputs
+ *
+ * HISTORY:
+ * - 2025-09-22: Initial implementation using widgets_values array with index mapping
+ * - 2025-09-22: Bug found in DWPreprocessor - connected inputs incorrectly consuming widget indices
+ * - 2025-09-22: Attempted fix by skipping connected inputs (continue instead of widgetIndex++)
+ * - 2025-09-22: Discovered complex edge case: some connected inputs DO have values in widgets_values that need skipping
+ * - 2025-09-22: Implemented _widgets-based approach for more reliable widget value mapping
+ *
+ * CURRENT APPROACH: Use _widgets array for direct name-based mapping (bypasses index calculation complexity)
+ * FALLBACK: Keep old widgets_values logic for compatibility with nodes that don't have _widgets
  */
 function processNodeWidgetInputs(node: any, apiNodeInputs: Record<string, any>): void {
+  // NEW APPROACH (2025-09-22): Use _widgets for direct widget name -> value mapping
+  // This avoids complex index calculations and connected input edge cases
+  if (node._widgets && Array.isArray(node._widgets)) {
+    console.log(`🔧 Using _widgets approach for node ${node.id} (${node.type})`);
+
+    for (const widget of node._widgets) {
+      // Check if this widget corresponds to a connected input
+      const correspondingInput = node.inputs?.find((input: any) =>
+        input.name === widget.name && input.link !== null && input.link !== undefined
+      );
+
+      // Only use widget value if the input is not connected
+      if (!correspondingInput) {
+        apiNodeInputs[widget.name] = widget.value;
+        console.log(`  ✅ Widget ${widget.name} = ${widget.value} (disconnected)`);
+      } else {
+        console.log(`  ⏭️ Widget ${widget.name} skipped (input connected to link ${correspondingInput.link})`);
+      }
+    }
+    return;
+  }
+
+  // FALLBACK: Old widgets_values array approach (keep for compatibility)
+  // Issue: Complex index mapping can fail with certain node configurations
+  console.log(`🔧 Using widgets_values fallback for node ${node.id} (${node.type})`);
+
   if (!node.widgets_values || !Array.isArray(node.widgets_values)) {
     return;
   }
 
+  /* =========================================================================
+   * OLD LOGIC (Pre-2025-09-22): widgets_values array with index mapping
+   * =========================================================================
+   *
+   * KNOWN ISSUES:
+   * - Connected inputs with widgets create index calculation complexity
+   * - Some connected inputs have values in widgets_values that must be skipped
+   * - Index miscalculation leads to wrong values assigned (e.g., DWPreprocessor bug)
+   *
+   * ATTEMPTED FIXES:
+   * - Skip connected inputs without incrementing widgetIndex (caused other issues)
+   * - Complex logic to handle control_after_generate values
+   *
+   * RESULT: Fragile and error-prone for complex node configurations
+   */
 
   // Build mapping: which widgets_values index corresponds to which input
   let widgetIndex = 0;
-  
+
   if (node.inputs) {
     for (const input of node.inputs as any[]) {
       // Check if this input has a widget (can be controlled by widgets_values)
       if (input.widget) {
-        
-        // If this input is connected (has link), skip the widget value
+
+        // ORIGINAL APPROACH: Connected inputs consume widget values (need to skip them)
         if (input.link !== null && input.link !== undefined) {
           widgetIndex++; // Skip this widget value
-          
+
           // Special handling for control_after_generate - skip additional value
           if ((input.name === 'seed' || input.name === 'noise_seed') && widgetIndex < node.widgets_values.length) {
             const nextValue = node.widgets_values[widgetIndex];
@@ -1413,12 +1463,12 @@ function processNodeWidgetInputs(node: any, apiNodeInputs: Record<string, any>):
           // Input is not connected, use widget value
           if (widgetIndex < node.widgets_values.length) {
             let widgetValue = node.widgets_values[widgetIndex];
-            
+
             // Skip control_after_generate values
             const CONTROL_VALUES = ['fixed', 'increment', 'decrement', 'randomize'];
             if (CONTROL_VALUES.includes(widgetValue)) {
               widgetIndex++;
-              
+
               // Get next value if available
               if (widgetIndex < node.widgets_values.length) {
                 widgetValue = node.widgets_values[widgetIndex];
@@ -1426,9 +1476,18 @@ function processNodeWidgetInputs(node: any, apiNodeInputs: Record<string, any>):
                 continue;
               }
             }
-            
+
             apiNodeInputs[input.name] = widgetValue;
             widgetIndex++;
+
+            // Special handling for control_after_generate - skip additional value
+            if ((input.name === 'seed' || input.name === 'noise_seed') && widgetIndex < node.widgets_values.length) {
+              const nextValue = node.widgets_values[widgetIndex];
+              const CONTROL_VALUES = ['fixed', 'increment', 'decrement', 'randomize'];
+              if (CONTROL_VALUES.includes(nextValue)) {
+                widgetIndex++; // Skip control value too
+              }
+            }
           }
         }
       }
