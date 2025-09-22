@@ -47,7 +47,7 @@ export const SettingsDropdown = forwardRef<HTMLDivElement, SettingsDropdownProps
       ref={ref} 
       className="fixed right-4 w-60 z-50 pwa-header" 
       style={{
-        top: isExecuting ? '230px' : '148px'
+        top: isExecuting ? '254px' : '168px'
       }}
     >
       {/* Glassmorphism container - EXACTLY like QuickActionPanel */}

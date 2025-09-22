@@ -109,7 +109,7 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
 
   return (
     <header className="absolute top-0 left-0 right-0 z-10 p-4 pwa-header">
-      <div className="bg-white/20 dark:bg-slate-800/20 backdrop-blur-xl shadow-2xl shadow-slate-900/10 dark:shadow-slate-900/25 border border-white/20 dark:border-slate-600/20 px-4 py-3 space-y-2 relative overflow-hidden">
+      <div className="bg-white/20 dark:bg-slate-800/20 backdrop-blur-xl shadow-2xl shadow-slate-900/10 dark:shadow-slate-900/25 border-b border-white/20 dark:border-slate-600/20 px-4 py-5 space-y-2 relative overflow-hidden">
         <div className="flex items-center space-x-4">
           <Button
             onClick={onNavigateBack}

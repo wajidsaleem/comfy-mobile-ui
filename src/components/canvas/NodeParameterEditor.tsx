@@ -1,19 +1,14 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ExternalLink, Play, Target, ArrowLeft, ArrowRight, Edit, Image as ImageIcon, Video } from 'lucide-react';
+import { ExternalLink, Play, Target, Edit, ArrowDownToLine, ArrowUpFromLine, X } from 'lucide-react';
 import { OutputsGallery } from '@/components/media/OutputsGallery';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { INodeWithMetadata, IProcessedParameter } from '@/shared/types/comfy/IComfyObjectInfo';
 import { ComfyGraphNode } from '@/core/domain/ComfyGraphNode';
-import { IComfyWidget } from '@/shared/types/app/base';
-import { NodeMode } from '@/shared/types/app/base';
-import { WidgetIndexMapper } from '@/shared/types/widgets/WidgetIndexMapper';
-import { WidgetValueSerializer } from '@/shared/types/widgets/WidgetValueSerializer';
 import { WidgetValueEditor } from '@/components/controls/WidgetValueEditor';
 import { VideoPreviewSection } from '@/components/media/VideoPreviewSection';
 import { InlineImagePreview } from '@/components/media/InlineImagePreview';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
 
 interface NodeBounds {
   x: number;
@@ -65,6 +60,11 @@ interface NodeParameterEditorProps {
   canSingleExecute?: boolean;
   isSingleExecuting?: boolean;
   onSingleExecute?: (nodeId: number) => void;
+  // Carousel state managed externally
+  currentSlide?: number;
+  // Link disconnection functionality
+  onDisconnectInput?: (nodeId: number, inputSlot: number) => void;
+  onDisconnectOutput?: (nodeId: number, outputSlot: number, linkId: number) => void;
 }
 
 export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
@@ -96,7 +96,13 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
   canSingleExecute = false,
   isSingleExecuting = false,
   onSingleExecute,
+  // Carousel props
+  currentSlide = 1,
+  // Link disconnection props
+  onDisconnectInput,
+  onDisconnectOutput,
 }) => {
+
   // State for IMAGE/VIDEO file selection modal
   const [fileSelectionState, setFileSelectionState] = useState<{
     isOpen: boolean;
@@ -105,42 +111,52 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
   }>({ isOpen: false, paramName: null, paramType: null });
   const nodeId = typeof selectedNode.id === 'string' ? parseInt(selectedNode.id) : selectedNode.id;
 
-  // Helper function to detect IMAGE/VIDEO parameters
+  // Helper function to detect IMAGE/VIDEO parameters (for Value area clicks)
   const detectParameterType = (param: IProcessedParameter): 'IMAGE' | 'VIDEO' | null => {
     const name = param.name.toLowerCase();
     const possibleValues = param.possibleValues || [];
-    
+    const currentValue = getWidgetValue(nodeId, param.name, param.value);
+
     // Exclude model/config parameter names that are not actual image/video parameters
     const excludedNames = ['clip_name', 'ckpt_name', 'model_name', 'lora_name', 'vae_name', 'upscale_model_name', 'controlnet_name'];
     if (excludedNames.includes(name)) {
       return null;
-    }  
-    
-    // Check possible values for image extensions
+    }
+
+    // First check current value - if it's a file with extension, use that
+    if (currentValue && typeof currentValue === 'string') {
+      if (currentValue.match(/\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i)) {
+        return 'IMAGE';
+      }
+      if (currentValue.match(/\.(mp4|webm|avi|mov|mkv|flv|wmv|mpg|mpeg)$/i)) {
+        return 'VIDEO';
+      }
+    }
+
+    // Check possible values for image extensions (more comprehensive)
     const hasImageExtensions = possibleValues.some((value: any) => {
       const str = String(value).toLowerCase();
-      return str.includes('.png') || str.includes('.jpg') || str.includes('.jpeg') || 
-             str.includes('.webp') || str.includes('.gif') || str.includes('.bmp');
+      return str.match(/\.(png|jpg|jpeg|gif|webp|bmp|svg)$/);
     });
-    
+
     if (hasImageExtensions) {
       return 'IMAGE';
     }
-    
-    // Check possible values for video extensions
+
+    // Check possible values for video extensions (more comprehensive)
     const hasVideoExtensions = possibleValues.some((value: any) => {
       const str = String(value).toLowerCase();
-      return str.includes('.mp4') || str.includes('.avi') || str.includes('.mov') || 
-             str.includes('.mkv') || str.includes('.webm') || str.includes('.gif');
+      return str.match(/\.(mp4|webm|avi|mov|mkv|flv|wmv|mpg|mpeg)$/);
     });
-    
+
     if (hasVideoExtensions) {
       return 'VIDEO';
     }
-    
+
     return null;
   };
-  
+
+
   // Handle file selection from OutputsGallery
   const handleFileSelect = (filename: string) => {
     if (fileSelectionState.paramName && setWidgetValue) {
@@ -415,18 +431,18 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
                     </div>
                   </div>
                 ) : (() => {
-                  // Check if this is an IMAGE/VIDEO parameter
+                  // Check if this is an IMAGE/VIDEO parameter (for Value area clicks)
                   const parameterType = detectParameterType(param);
-                  
+
                   if (parameterType) {
-                    // For IMAGE/VIDEO parameters, use WidgetValueEditor but intercept the edit button
+                    // For IMAGE/VIDEO parameters, use WidgetValueEditor but intercept edit for Value clicks
                     return (
                       <WidgetValueEditor
                         param={param}
                         nodeId={typeof selectedNode.id === 'string' ? parseInt(selectedNode.id) : selectedNode.id}
                         currentValue={getWidgetValue(
-                            typeof selectedNode.id === 'string' ? parseInt(selectedNode.id) : selectedNode.id, 
-                            param.name, 
+                            typeof selectedNode.id === 'string' ? parseInt(selectedNode.id) : selectedNode.id,
+                            param.name,
                             param.value
                           )}
                         isEditing={editingParam?.nodeId === (typeof selectedNode.id === 'string' ? parseInt(selectedNode.id) : selectedNode.id) && editingParam?.paramName === param.name}
@@ -435,8 +451,8 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
                         isModified={isWidgetModified(param.name)}
                         modifiedHighlightClasses={getModifiedClasses(param.name)}
                         onStartEditing={(nodeId, paramName, value) => {
-                          // Intercept edit for IMAGE/VIDEO - open modal instead
-                          console.log('🔍 Intercepting IMAGE/VIDEO edit for', paramName);
+                          // For IMAGE/VIDEO parameters, open OutputsGallery immediately instead of edit mode
+                          console.log('🔍 Opening OutputsGallery for IMAGE/VIDEO:', paramName);
                           setFileSelectionState({
                             isOpen: true,
                             paramName: paramName,
@@ -456,7 +472,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
                         />
                     );
                   }
-                  
+
                   // Default to WidgetValueEditor for non-IMAGE/VIDEO parameters
                   return (
                     <WidgetValueEditor
@@ -506,35 +522,36 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
                   
                   {/* Parameter Value or Link Info */}
                   {param.linkInfo ? (
-                    <div className="mb-2">
-                      <span className="text-sm text-slate-600 dark:text-slate-400">From: </span>
-                      <div className="inline-flex items-center space-x-1 text-sm max-w-full">
-                        <button
-                          onClick={() => {
-                            onNavigateToNode(param.linkInfo!.sourceNodeId);
-                            // Find and select the source node
-                            const sourceNode = nodeBounds.get(param.linkInfo!.sourceNodeId)?.node;
-                            if (sourceNode) {
-                              setTimeout(() => {
-                                onSelectNode(sourceNode);
-                              }, 300); // Wait for animation to center the node first
-                            }
-                          }}
-                          className="bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded text-blue-700 dark:text-blue-300 inline-flex items-center max-w-[200px] md:max-w-[300px] hover:bg-blue-200 dark:hover:bg-blue-800/40 transition-all cursor-pointer border border-blue-200 dark:border-blue-700 hover:border-blue-300 dark:hover:border-blue-600 shadow-sm hover:shadow-md active:scale-95"
-                        >
-                          <span className="truncate">
-                            {param.linkInfo.sourceNodeTitle || param.linkInfo.sourceNodeType}
-                          </span>
-                          <span className="flex-shrink-0 ml-1">
-                            #{param.linkInfo.sourceNodeId}
-                          </span>
-                          <ExternalLink className="w-3 h-3 ml-1 flex-shrink-0 opacity-70" />
-                        </button>
-                        <span className="text-slate-500 dark:text-slate-400 flex-shrink-0">→</span>
-                        <code className="bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded text-green-700 dark:text-green-300 truncate max-w-[150px]">
-                          {param.linkInfo.sourceOutputName}
-                        </code>
-                      </div>
+                    <div className="mb-3">
+                      <button
+                        onClick={() => {
+                          onNavigateToNode(param.linkInfo!.sourceNodeId);
+                          // Find and select the source node
+                          const sourceNode = nodeBounds.get(param.linkInfo!.sourceNodeId)?.node;
+                          if (sourceNode) {
+                            setTimeout(() => {
+                              onSelectNode(sourceNode);
+                            }, 300); // Wait for animation to center the node first
+                          }
+                        }}
+                        className="w-full p-3 bg-gradient-to-r from-blue-100 to-blue-50 dark:from-blue-900/40 dark:to-blue-800/20 border border-blue-200 dark:border-blue-700 rounded-lg hover:shadow-md transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <span className="font-medium text-blue-800 dark:text-blue-200 truncate">
+                              {param.linkInfo.sourceNodeTitle || param.linkInfo.sourceNodeType}
+                            </span>
+                            <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-600">
+                              #{param.linkInfo.sourceNodeId}
+                            </Badge>
+                          </div>
+                          <ExternalLink className="w-3 h-3 text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                        <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 text-left">
+                          Output: <span className="font-mono bg-blue-200 dark:bg-blue-800/50 px-1.5 py-0.5 rounded">{param.linkInfo.sourceOutputName}</span>
+                        </div>
+                      </button>
                     </div>
                   ) : (
                     <div className="mb-2">
@@ -666,7 +683,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
     return (
       <div className="space-y-3">
         <h4 className="text-md font-medium text-slate-700 dark:text-slate-300 flex items-center space-x-2">
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowDownToLine className="w-4 h-4" />
           <span>Input Slots ({inputSlots.length})</span>
         </h4>
         <div className="space-y-2">
@@ -679,11 +696,30 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
                   // Connected input - use same design as connected widget
                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <div className="text-sm text-blue-700 dark:text-blue-300">
-                      <div className="flex items-center space-x-1 font-medium mb-1">
-                        <span>{input.name || `Input ${index}`}</span>
-                        <ExternalLink className="w-3 h-3" />
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center space-x-1 font-medium">
+                          <span>{input.name || `Input ${index}`}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </div>
+                        {onDisconnectInput && (
+                          <button
+                            onClick={() => {
+                              // Find the correct index in selectedNode.inputs by matching the input object or its name
+                              const actualInputIndex = selectedNode.inputs?.findIndex(inp =>
+                                inp.name === input.name && inp.type === input.type
+                              ) ?? -1;
+                              if (actualInputIndex >= 0) {
+                                onDisconnectInput(nodeId, actualInputIndex);
+                              }
+                            }}
+                            className="p-2 rounded-md hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 transition-colors shadow-sm hover:shadow-md"
+                            title="Disconnect this input"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
-                      <div className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                      <div className="space-y-2">
                         <button
                           onClick={() => {
                             onNavigateToNode(sourceInfo.sourceNodeId);
@@ -695,12 +731,30 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
                               }, 300); // Wait for animation to center the node first
                             }
                           }}
-                          className="border-l-2 border-blue-300 dark:border-blue-600 pl-2 hover:bg-blue-100 dark:hover:bg-blue-800/40 transition-all cursor-pointer rounded p-1 -ml-1 w-full text-left"
+                          className="w-full p-3 bg-gradient-to-r from-blue-100 to-blue-50 dark:from-blue-900/40 dark:to-blue-800/20 border border-blue-200 dark:border-blue-700 rounded-lg hover:shadow-md transition-all cursor-pointer group"
                         >
-                          <div>Node: {sourceInfo.sourceNodeTitle} (ID: {sourceInfo.sourceNodeId})</div>
-                          <div>Output: {sourceInfo.sourceOutputName}</div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              <span className="font-medium text-blue-800 dark:text-blue-200 truncate">
+                                {sourceInfo.sourceNodeTitle}
+                              </span>
+                              <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-600">
+                                #{sourceInfo.sourceNodeId}
+                              </Badge>
+                            </div>
+                            <ExternalLink className="w-3 h-3 text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform" />
+                          </div>
+                          <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 text-left">
+                            Output: <span className="font-mono bg-blue-200 dark:bg-blue-800/50 px-1.5 py-0.5 rounded">{sourceInfo.sourceOutputName}</span>
+                          </div>
                         </button>
-                        <div>Type: {input.type || 'Unknown'}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center space-x-1">
+                          <span>Type:</span>
+                          <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                            {input.type || 'Unknown'}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -760,7 +814,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
     return (
       <div className="space-y-3">
         <h4 className="text-md font-medium text-slate-700 dark:text-slate-300 flex items-center space-x-2">
-          <ArrowRight className="w-4 h-4" />
+          <ArrowUpFromLine className="w-4 h-4" />
           <span>Output Slots ({selectedNode.outputs.length})</span>
         </h4>
         <div className="space-y-2">
@@ -777,34 +831,76 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
                         <span>{output.name || `Output ${index}`}</span>
                         <ExternalLink className="w-3 h-3" />
                       </div>
-                      <div className="text-xs text-green-600 dark:text-green-400 space-y-1">
+                      <div className="space-y-2">
                         {output.links.map((linkId: number) => {
                           const targetInfo = getTargetNodeInfo(linkId);
                           return targetInfo ? (
-                            <button
-                              key={linkId}
-                              onClick={() => {
-                                onNavigateToNode(targetInfo.targetNodeId);
-                                // Find and select the target node
-                                const targetNode = nodeBounds.get(targetInfo.targetNodeId)?.node;
-                                if (targetNode) {
-                                  setTimeout(() => {
-                                    onSelectNode(targetNode);
-                                  }, 300); // Wait for animation to center the node first
-                                }
-                              }}
-                              className="border-l-2 border-green-300 dark:border-green-600 pl-2 hover:bg-green-100 dark:hover:bg-green-800/40 transition-all cursor-pointer rounded p-1 -ml-1 w-full text-left"
-                            >
-                              <div>Node: {targetInfo.targetNodeTitle} (ID: {targetInfo.targetNodeId})</div>
-                              <div>Input: {targetInfo.targetInputName}</div>
-                            </button>
+                            <div key={linkId} className="p-3 bg-gradient-to-r from-green-100 to-green-50 dark:from-green-900/40 dark:to-green-800/20 border border-green-200 dark:border-green-700 rounded-lg hover:shadow-md transition-all group">
+                              <div className="flex items-center justify-between">
+                                <button
+                                  onClick={() => {
+                                    onNavigateToNode(targetInfo.targetNodeId);
+                                    // Find and select the target node
+                                    const targetNode = nodeBounds.get(targetInfo.targetNodeId)?.node;
+                                    if (targetNode) {
+                                      setTimeout(() => {
+                                        onSelectNode(targetNode);
+                                      }, 300); // Wait for animation to center the node first
+                                    }
+                                  }}
+                                  className="flex-1 text-left cursor-pointer"
+                                >
+                                  <div className="flex items-center space-x-2 mb-1">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                    <span className="font-medium text-green-800 dark:text-green-200 truncate">
+                                      {targetInfo.targetNodeTitle}
+                                    </span>
+                                    <Badge variant="outline" className="text-xs px-1.5 py-0.5 bg-green-50 dark:bg-green-900/30 border-green-300 dark:border-green-600">
+                                      #{targetInfo.targetNodeId}
+                                    </Badge>
+                                    <ExternalLink className="w-3 h-3 text-green-600 dark:text-green-400 group-hover:translate-x-0.5 transition-transform" />
+                                  </div>
+                                  <div className="text-xs text-green-600 dark:text-green-400">
+                                    Input: <span className="font-mono bg-green-200 dark:bg-green-800/50 px-1.5 py-0.5 rounded">{targetInfo.targetInputName}</span>
+                                  </div>
+                                </button>
+                                {onDisconnectOutput && (
+                                  <button
+                                    onClick={() => onDisconnectOutput(nodeId, index, linkId)}
+                                    className="p-2 rounded-md hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 transition-colors ml-2 flex-shrink-0 shadow-sm hover:shadow-md"
+                                    title="Disconnect this connection"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           ) : (
-                            <div key={linkId} className="border-l-2 border-green-300 dark:border-green-600 pl-2">
-                              Link ID: {linkId}
+                            <div key={linkId} className="p-3 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800/40 dark:to-gray-700/20 border border-gray-200 dark:border-gray-700 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                                  <span className="text-gray-600 dark:text-gray-400">Unknown target (Link ID: {linkId})</span>
+                                </div>
+                                {onDisconnectOutput && (
+                                  <button
+                                    onClick={() => onDisconnectOutput(nodeId, index, linkId)}
+                                    className="p-2 rounded-md hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 transition-colors ml-2 flex-shrink-0 shadow-sm hover:shadow-md"
+                                    title="Disconnect this connection"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           );
                         })}
-                        <div>Type: {output.type || 'Unknown'}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center space-x-1 mt-2">
+                          <span>Type:</span>
+                          <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                            {output.type || 'Unknown'}
+                          </Badge>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -834,42 +930,10 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
     );
   };
 
-  const currentNodeMode = getNodeMode(nodeId, selectedNode.mode || 0);
-  
-  const nodeModeItems = [
-    {
-      value: NodeMode.ALWAYS,
-      label: 'Always',
-      color: 'text-green-600'
-    },
-    {
-      value: NodeMode.NEVER,
-      label: 'Mute',
-      color: 'text-blue-600'
-    },
-    {
-      value: NodeMode.BYPASS,
-      label: 'Bypass',
-      color: 'text-purple-600'
-    }
-  ];
-
-  return (
+  // Render main content (preview + widgets)
+  const renderMainContent = () => (
     <div className="space-y-6">
-      {/* Node Mode Control */}
-      <div className="space-y-3">
-        <h4 className="text-md font-medium text-slate-700 dark:text-slate-300">
-          Node Mode
-        </h4>
-        <SegmentedControl
-          items={nodeModeItems}
-          value={currentNodeMode}
-          onChange={(mode) => onNodeModeChange(nodeId, mode as number)}
-          size="md"
-          className="w-full"
-        />
-      </div>
-      
+
       {/* Image Preview Section */}
       {imagePreview && (
         <div className="space-y-3">
@@ -877,7 +941,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
             <span>🖼️</span>
             <span>Image Preview</span>
           </h4>
-          <InlineImagePreview 
+          <InlineImagePreview
             imagePreview={imagePreview}
             onClick={() => onFilePreview(imagePreview.filename || imagePreview)}
             isFromExecution={true}
@@ -895,15 +959,9 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
         />
       )}
 
-      {/* Input Slots */}
-      {renderInputSlots()}
-      
-      {/* Output Slots */}
-      {renderOutputSlots()}
-      
       {/* ComfyGraphNode Widgets */}
       {widgets.length > 0 && renderParameterSection("Node Widgets", widgets, "🎛️", true)}
-      
+
       {/* Fallback to raw widget values if no structured widgets */}
       {widgets.length === 0 && selectedNode.widgets_values && (
         <div className="space-y-2">
@@ -917,7 +975,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
           </div>
         </div>
       )}
-      
+
       {/* Single Execute Section */}
       {canSingleExecute && onSingleExecute && (
         <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-slate-700">
@@ -928,13 +986,13 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
                 <span>Single Node Execution</span>
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {isOutputNode 
+                {isOutputNode
                   ? "Execute only the nodes required to generate this output"
                   : "Execute only the dependencies needed for this node"
                 }
               </p>
             </div>
-            
+
             <Button
               size="sm"
               disabled={isSingleExecuting}
@@ -951,7 +1009,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
               {isSingleExecuting ? 'Executing...' : 'Execute This'}
             </Button>
           </div>
-          
+
           {isOutputNode && (
             <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
               <div className="flex items-start space-x-2">
@@ -967,7 +1025,35 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
           )}
         </div>
       )}
-      
+    </div>
+  );
+
+  const slides = [
+    { id: 0, content: renderInputSlots(), title: "Input Slots", icon: <ArrowDownToLine className="w-4 h-4" /> },
+    { id: 1, content: renderMainContent(), title: "Node Controls", icon: <Edit className="w-4 h-4" /> },
+    { id: 2, content: renderOutputSlots(), title: "Output Slots", icon: <ArrowUpFromLine className="w-4 h-4" /> }
+  ];
+
+  return (
+    <div className="h-full overflow-hidden">
+      <div
+        className="flex h-full transition-transform duration-300 ease-out"
+        style={{ transform: `translateX(-${currentSlide * 100}%)` }}
+      >
+        {slides.map((slide) => (
+          <div key={slide.id} className="w-full flex-shrink-0 overflow-y-auto p-4">
+            {slide.content || (
+              <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600">
+                <div className="text-center space-y-2">
+                  {slide.icon}
+                  <div className="text-sm">No {slide.title.toLowerCase()}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
       {/* IMAGE/VIDEO File Selection Modal Portal */}
       {fileSelectionState.isOpen && fileSelectionState.paramType && createPortal(
         <div className="fixed inset-0 z-[9999] bg-white dark:bg-slate-900 overflow-auto overscroll-contain">

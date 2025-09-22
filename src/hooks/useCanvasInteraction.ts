@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { WorkflowNode } from '@/shared/types/app/IComfyWorkflow';
 import type { GroupBounds } from '@/shared/utils/rendering/CanvasRendererService';
-import { mapGroupsWithNodes } from '@/utils/GroupNodeMapper';
+import { mapGroupsWithNodes, Group } from '@/utils/GroupNodeMapper';
 import { toast } from 'sonner';
 
 interface ViewportTransform {
@@ -60,7 +60,7 @@ interface UseCanvasInteractionProps {
   setNodeBounds: React.Dispatch<React.SetStateAction<Map<number, NodeBounds>>>;
   groupBounds: GroupBounds[]; // Add group bounds support
   setGroupBounds: React.Dispatch<React.SetStateAction<GroupBounds[]>>; // Add group bounds setter
-  workflowGroups: Array<{ id: number; nodeIds: number[]; title: string; }>;  // For group-node relationships
+  workflowGroups: Group[];  // For group-node relationships
   workflow?: any; // Add workflow data for real-time group-node mapping
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   workflowId?: string;
@@ -1313,7 +1313,8 @@ export const useCanvasInteraction = ({
         groupId,
         title: group.title,
         nodeIds: group.nodeIds,
-        nodes: groupNodes
+        nodes: groupNodes,
+        bounding: group.bounding
       }
     } as WorkflowNode;
 
@@ -1399,13 +1400,13 @@ export const useCanvasInteraction = ({
       y: nodeBound.y + nodeBound.height / 2
     };
 
-    // Calculate target position (25% from top, center horizontally)
+    // Calculate target position (center both horizontally and vertically)
     const canvasTarget = {
       x: canvas.width / 2,
-      y: canvas.height * 0.25  // 25% from top instead of center
+      y: canvas.height / 2  // Center vertically for full-screen inspector
     };
 
-    // Target viewport position to place node at 25% from top (with zoom)
+    // Target viewport position to place node at center (with zoom)
     const targetViewport = {
       x: canvasTarget.x - nodeCenter.x,
       y: canvasTarget.y - nodeCenter.y,

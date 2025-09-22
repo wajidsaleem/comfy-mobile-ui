@@ -12,6 +12,7 @@ import { ComfyGraphNode } from '@/core/domain/ComfyGraphNode';
 import { IComfyWidget } from '@/shared/types/app/IComfyGraphNode';
 import { isImageFile, isVideoFile } from '@/shared/utils/ComfyFileUtils';
 import { InlineImagePreview } from '@/components/media/InlineImagePreview';
+import { InlineVideoPreview } from '@/components/media/InlineVideoPreview';
 import { OutputsGallery } from '@/components/media/OutputsGallery';
 import { 
   NumberWidget, 
@@ -443,25 +444,9 @@ export const WidgetValueEditor: React.FC<WidgetValueEditorProps> = ({
             </div>
           )}
           
-          {/* Preview and Upload Icons for Image/Video Files */}
+          {/* Upload Icons for Image/Video Files */}
           {currentValue != null && typeof currentValue === 'string' && (isImageFile(currentValue) || isVideoFile(currentValue)) && (
             <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  onFilePreview(currentValue);
-                }}
-                className="p-1.5 rounded-md bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-800/50 text-blue-600 dark:text-blue-400 transition-all duration-200 hover:shadow-sm active:scale-95 border border-blue-200 dark:border-blue-700"
-                title={`Preview ${isImageFile(currentValue) ? 'image' : 'video'}: ${currentValue}`}
-              >
-                {isImageFile(currentValue) ? (
-                  <ImageIcon className="w-4 h-4" />
-                ) : (
-                  <Video className="w-4 h-4" />
-                )}
-              </button>
-              
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -504,8 +489,18 @@ export const WidgetValueEditor: React.FC<WidgetValueEditorProps> = ({
         {/* Inline Image Preview */}
         {currentValue != null && typeof currentValue === 'string' && isImageFile(currentValue) && (
           <div className="mt-3">
-            <InlineImagePreview 
+            <InlineImagePreview
               imagePreview={currentValue}
+              onClick={() => onFilePreview(currentValue)}
+            />
+          </div>
+        )}
+
+        {/* Inline Video Preview */}
+        {currentValue != null && typeof currentValue === 'string' && isVideoFile(currentValue) && (
+          <div className="mt-3">
+            <InlineVideoPreview
+              videoPreview={currentValue}
               onClick={() => onFilePreview(currentValue)}
             />
           </div>

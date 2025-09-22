@@ -579,6 +579,31 @@ export function removeNodeWithLinks(
   };
 }
 
+/**
+ * Remove a group from workflow JSON and graph
+ */
+export function removeGroup(
+  workflowJson: IComfyJson,
+  comfyGraph: ComfyGraph,
+  groupId: number
+): { workflowJson: IComfyJson; comfyGraph: ComfyGraph } {
+
+  // 1. Create deep copy of workflow JSON for safe mutation
+  const updatedWorkflowJson: IComfyJson = JSON.parse(JSON.stringify(workflowJson));
+
+  // 2. Remove the group from workflow JSON groups array
+  if (updatedWorkflowJson.groups && Array.isArray(updatedWorkflowJson.groups)) {
+    updatedWorkflowJson.groups = updatedWorkflowJson.groups.filter(group => group.id !== groupId);
+  }
+
+  // 3. Create updated ComfyGraph
+  const updatedGraph = new ComfyGraph();
+
+  console.log(`✅ Group ${groupId} removed from workflow and graph`);
+
+  return { workflowJson: updatedWorkflowJson, comfyGraph: updatedGraph };
+}
+
 // Main export object containing all workflow graph service functions
 export const WorkflowGraphService = {
   loadWorkflow,
@@ -588,7 +613,8 @@ export const WorkflowGraphService = {
   serializeGraph,
   addNodeToWorkflow,
   collectNodeLinkIds,
-  removeNodeWithLinks
+  removeNodeWithLinks,
+  removeGroup
 } as const;
 
 // Backward compatibility

@@ -1,13 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, RefreshCw } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
+import { Trash2, RefreshCw, Edit3, Check, X, ChevronLeft, ChevronRight, ArrowDownToLine, ArrowUpFromLine, Palette, Settings, Maximize2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { INodeWithMetadata } from '@/shared/types/comfy/IComfyObjectInfo';
 import { ComfyGraphNode } from '@/core/domain/ComfyGraphNode';
 import { NodeMode } from '@/shared/types/app/base';
 import { NodeParameterEditor } from '@/components/canvas/NodeParameterEditor';
 import { GroupInspector } from '@/components/canvas/GroupInspector';
+import { globalWebSocketService } from '@/infrastructure/websocket/GlobalWebSocketService';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 
 interface NodeBounds {
   x: number;
@@ -65,8 +70,21 @@ interface NodeInspectorProps {
   onNodeColorChange?: (nodeId: number, bgcolor: string) => void;
   // Node deletion functionality
   onNodeDelete?: (nodeId: number) => void;
+  // Group deletion functionality
+  onGroupDelete?: (groupId: number) => void;
   // Node refresh functionality
   onNodeRefresh?: (nodeId: number) => void;
+  // Node title change functionality
+  onNodeTitleChange?: (nodeId: number, title: string) => void;
+  // Node size change functionality
+  onNodeSizeChange?: (nodeId: number, width: number, height: number) => void;
+  // Node collapse functionality
+  onNodeCollapseChange?: (nodeId: number, collapsed: boolean) => void;
+  // Group size change functionality
+  onGroupSizeChange?: (groupId: number, width: number, height: number) => void;
+  // Link disconnection functionality
+  onDisconnectInput?: (nodeId: number, inputSlot: number) => void;
+  onDisconnectOutput?: (nodeId: number, outputSlot: number, linkId: number) => void;
 }
 
 // Available node background colors (reduced similar colors)
@@ -140,6 +158,272 @@ const ColorPicker: React.FC<ColorPickerProps> = ({ selectedColor, onColorChange 
   );
 };
 
+interface NodeSizeControlProps {
+  selectedNode: ComfyGraphNode;
+  onSizeChange?: (width: number, height: number) => void;
+  onCollapseChange?: (collapsed: boolean) => void;
+}
+
+const NodeSizeControl: React.FC<NodeSizeControlProps> = ({
+  selectedNode,
+  onSizeChange,
+  onCollapseChange,
+}) => {
+  // Get current node size, defaulting to reasonable values
+  const currentWidth = selectedNode.size?.[0] || 200;
+  const currentHeight = selectedNode.size?.[1] || 100;
+  const isCollapsed = selectedNode.flags?.collapsed === true;
+
+  // Store original values when component first mounts or node changes
+  const [originalWidth, setOriginalWidth] = useState(currentWidth);
+  const [originalHeight, setOriginalHeight] = useState(currentHeight);
+  const [originalCollapsed, setOriginalCollapsed] = useState(isCollapsed);
+
+  // Local state for real-time preview
+  const [previewWidth, setPreviewWidth] = useState(currentWidth);
+  const [previewHeight, setPreviewHeight] = useState(currentHeight);
+  const [previewCollapsed, setPreviewCollapsed] = useState(isCollapsed);
+
+  // Update states when selectedNode changes (different node selected)
+  useEffect(() => {
+    const newWidth = selectedNode.size?.[0] || 200;
+    const newHeight = selectedNode.size?.[1] || 100;
+    const newCollapsed = selectedNode.flags?.collapsed === true;
+
+    // Only update if this is a different node (by comparing current vs stored original)
+    if (newWidth !== originalWidth || newHeight !== originalHeight || newCollapsed !== originalCollapsed) {
+      setOriginalWidth(newWidth);
+      setOriginalHeight(newHeight);
+      setOriginalCollapsed(newCollapsed);
+      setPreviewWidth(newWidth);
+      setPreviewHeight(newHeight);
+      setPreviewCollapsed(newCollapsed);
+    }
+  }, [selectedNode.id]); // Only depend on node ID to detect node changes
+
+  // Handle width change
+  const handleWidthChange = (values: number[]) => {
+    const newWidth = values[0];
+    setPreviewWidth(newWidth);
+    if (onSizeChange) {
+      onSizeChange(newWidth, previewHeight);
+    }
+  };
+
+  // Handle height change
+  const handleHeightChange = (values: number[]) => {
+    const newHeight = values[0];
+    setPreviewHeight(newHeight);
+    if (onSizeChange) {
+      onSizeChange(previewWidth, newHeight);
+    }
+  };
+
+  // Handle collapse toggle
+  const handleCollapseChange = (collapsed: boolean) => {
+    setPreviewCollapsed(collapsed);
+    if (onCollapseChange) {
+      onCollapseChange(collapsed);
+    }
+  };
+
+  // Calculate relative size change based on original values
+  const widthChange = ((previewWidth - originalWidth) / originalWidth * 100).toFixed(0);
+  const heightChange = ((previewHeight - originalHeight) / originalHeight * 100).toFixed(0);
+
+  // Calculate preview dimensions for overlapping boxes
+  const maxContainerWidth = 120;
+  const maxContainerHeight = 80;
+
+  // Calculate scale factor based on the larger of original or new size
+  const maxWidth = Math.max(originalWidth, previewCollapsed ? originalWidth : previewWidth);
+  const maxHeight = Math.max(originalHeight, previewCollapsed ? 30 : previewHeight);
+
+  const scaleX = maxContainerWidth / maxWidth;
+  const scaleY = maxContainerHeight / maxHeight;
+  const scale = Math.min(scaleX, scaleY, 1) * 0.8; // 80% of calculated scale for padding
+
+  // Calculate display dimensions
+  const originalDisplayWidth = originalCollapsed ? 80 * scale : originalWidth * scale;
+  const originalDisplayHeight = originalCollapsed ? 30 * scale : originalHeight * scale;
+
+  let newDisplayWidth, newDisplayHeight;
+  if (previewCollapsed) {
+    newDisplayWidth = 80 * scale; // Fixed collapsed width (80px)
+    newDisplayHeight = 30 * scale; // Fixed collapsed height (30px)
+  } else {
+    newDisplayWidth = previewWidth * scale;
+    newDisplayHeight = previewHeight * scale;
+  }
+
+  // Determine container size (use the larger of original or new)
+  const containerWidth = Math.max(originalDisplayWidth, newDisplayWidth);
+  const containerHeight = Math.max(originalDisplayHeight, newDisplayHeight);
+
+  return (
+    <div className="space-y-4">
+      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Node Size:</span>
+
+      {/* Size Controls */}
+      <div className="space-y-6">
+        {/* Width Slider */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="text-base font-medium text-slate-600 dark:text-slate-400">Width</label>
+            <div className="flex items-center space-x-3">
+              <span className="text-sm font-mono text-slate-700 dark:text-slate-300 min-w-[80px] text-right">
+                {Math.round(previewWidth)}px
+              </span>
+              {Math.abs(Number(widthChange)) > 0 && (
+                <span className={`text-sm font-medium min-w-[50px] text-right ${
+                  Number(widthChange) > 0
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-red-600 dark:text-red-400'
+                }`}>
+                  {Number(widthChange) > 0 ? '+' : ''}{widthChange}%
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="px-2 py-2">
+            <Slider
+              value={[previewWidth]}
+              onValueChange={handleWidthChange}
+              min={80}
+              max={1600}
+              step={10}
+              className="w-full [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_.slider-track]:h-2"
+              disabled={previewCollapsed}
+            />
+          </div>
+        </div>
+
+        {/* Height Slider */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="text-base font-medium text-slate-600 dark:text-slate-400">Height</label>
+            <div className="flex items-center space-x-3">
+              <span className="text-sm font-mono text-slate-700 dark:text-slate-300 min-w-[80px] text-right">
+                {Math.round(previewHeight)}px
+              </span>
+              {Math.abs(Number(heightChange)) > 0 && (
+                <span className={`text-sm font-medium min-w-[50px] text-right ${
+                  Number(heightChange) > 0
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-red-600 dark:text-red-400'
+                }`}>
+                  {Number(heightChange) > 0 ? '+' : ''}{heightChange}%
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="px-2 py-2">
+            <Slider
+              value={[previewHeight]}
+              onValueChange={handleHeightChange}
+              min={30}
+              max={1600}
+              step={10}
+              className="w-full [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_.slider-track]:h-2"
+              disabled={previewCollapsed}
+            />
+          </div>
+        </div>
+
+        {/* Collapse Toggle */}
+        <div className="flex items-center justify-between py-3 px-2">
+          <label className="text-base font-medium text-slate-600 dark:text-slate-400">Collapsed</label>
+          <div className="scale-125">
+            <Switch
+              checked={previewCollapsed}
+              onCheckedChange={handleCollapseChange}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Size Preview */}
+      <div className="space-y-4 mt-8">
+        <span className="text-base font-medium text-slate-600 dark:text-slate-400">Preview:</span>
+        <div className="flex flex-col items-center p-6 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+          {/* Overlapping boxes container */}
+          <div
+            className="relative flex items-center justify-center"
+            style={{
+              width: `${containerWidth + 20}px`,
+              height: `${containerHeight + 20}px`,
+              minWidth: '80px',
+              minHeight: '60px'
+            }}
+          >
+            {/* Original size box (always rendered first, behind) */}
+            <div
+              className={`absolute border-2 rounded-sm transition-all ${
+                originalCollapsed
+                  ? 'bg-gray-200/70 dark:bg-gray-700/70 border-gray-400 dark:border-gray-500'
+                  : 'bg-blue-200/70 dark:bg-blue-800/70 border-blue-400 dark:border-blue-600'
+              }`}
+              style={{
+                width: `${Math.max(originalDisplayWidth, 16)}px`,
+                height: `${Math.max(originalDisplayHeight, 8)}px`,
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: previewWidth <= originalWidth && previewHeight <= originalHeight ? 2 : 1
+              }}
+              title={`Original: ${originalCollapsed ? '80×30' : `${Math.round(originalWidth)}×${Math.round(originalHeight)}`}${originalCollapsed ? ' (Collapsed)' : ''}`}
+            />
+
+            {/* New size box (rendered on top when larger, behind when smaller) */}
+            <div
+              className={`absolute border-2 rounded-sm transition-all ${
+                previewCollapsed
+                  ? 'bg-gray-300/80 dark:bg-gray-600/80 border-gray-500 dark:border-gray-400'
+                  : 'bg-green-200/80 dark:bg-green-800/80 border-green-400 dark:border-green-600'
+              }`}
+              style={{
+                width: `${Math.max(newDisplayWidth, 16)}px`,
+                height: `${Math.max(newDisplayHeight, 8)}px`,
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: previewWidth > originalWidth || previewHeight > originalHeight ? 2 : 1
+              }}
+              title={`New: ${previewCollapsed ? '80×30' : `${Math.round(previewWidth)}×${Math.round(previewHeight)}`}${previewCollapsed ? ' (Collapsed)' : ''}`}
+            />
+          </div>
+
+          {/* Size information */}
+          <div className="flex flex-col items-center space-y-3 mt-6 text-sm">
+            <div className="flex items-center space-x-2">
+              <div className={`w-4 h-4 rounded-sm border ${
+                originalCollapsed
+                  ? 'bg-gray-200 dark:bg-gray-700 border-gray-400 dark:border-gray-500'
+                  : 'bg-blue-200 dark:bg-blue-800 border-blue-400 dark:border-blue-600'
+              }`} />
+              <span className="text-slate-600 dark:text-slate-400 font-medium">
+                Original: {originalCollapsed ? '80×30' : `${Math.round(originalWidth)}×${Math.round(originalHeight)}`}
+                {originalCollapsed && ' (Collapsed)'}
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className={`w-4 h-4 rounded-sm border ${
+                previewCollapsed
+                  ? 'bg-gray-300 dark:bg-gray-600 border-gray-500 dark:border-gray-400'
+                  : 'bg-green-200 dark:bg-green-800 border-green-400 dark:border-green-600'
+              }`} />
+              <span className="text-slate-600 dark:text-slate-300 font-medium">
+                New: {previewCollapsed ? '80×30' : `${Math.round(previewWidth)}×${Math.round(previewHeight)}`}
+                {previewCollapsed && ' (Collapsed)'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const NodeInspector: React.FC<NodeInspectorProps> = ({
   selectedNode,
   nodeMetadata,
@@ -175,16 +459,115 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   onNodeColorChange,
   // Node deletion prop
   onNodeDelete,
+  // Group deletion prop
+  onGroupDelete,
   // Node refresh prop
   onNodeRefresh,
+  // Node title change prop
+  onNodeTitleChange,
+  // Node size change props
+  onNodeSizeChange,
+  onNodeCollapseChange,
+  // Group size change prop
+  onGroupSizeChange,
+  // Link disconnection props
+  onDisconnectInput,
+  onDisconnectOutput,
 }) => {
   const nodeId = typeof selectedNode.id === 'string' ? parseInt(selectedNode.id) : selectedNode.id;
   const metadata = nodeMetadata.get(nodeId);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editingTitleValue, setEditingTitleValue] = useState('');
+  const [currentSlide, setCurrentSlide] = useState(1); // 0: inputs, 1: main, 2: outputs
+  const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
+  const [isNodeModeOpen, setIsNodeModeOpen] = useState(false);
+  const [isNodeSizeOpen, setIsNodeSizeOpen] = useState(false);
+  const [isPromptExecuting, setIsPromptExecuting] = useState(() => {
+    // Initialize with current execution state to prevent animation flash
+    const currentState = globalWebSocketService.getCurrentExecutionState();
+    return currentState.isExecuting;
+  });
+  const [hasInitialHeightSet, setHasInitialHeightSet] = useState(false);
   
   // Get current node bgcolor from selectedNode
   const currentBgColor = selectedNode.bgcolor || undefined;
-  
+
+  // Listen for prompt execution state changes
+  useEffect(() => {
+    const service = globalWebSocketService;
+
+    // Mark that initial height has been set after first render
+    setTimeout(() => {
+      setHasInitialHeightSet(true);
+    }, 100);
+
+    // Event handlers
+    const handleExecuting = (event: any) => {
+      const { data } = event;
+      setIsPromptExecuting(data.node !== null);
+    };
+
+    const handleExecutionComplete = () => {
+      setIsPromptExecuting(false);
+    };
+
+    const handleProgressState = (event: any) => {
+      const { data } = event;
+      if (data.nodes) {
+        const hasRunningNodes = Object.values(data.nodes).some((node: any) => node.state === 'running');
+        setIsPromptExecuting(hasRunningNodes);
+      }
+    };
+
+    // Subscribe to events
+    const listenerIds = [
+      service.on('executing', handleExecuting),
+      service.on('execution_success', handleExecutionComplete),
+      service.on('execution_error', handleExecutionComplete),
+      service.on('execution_interrupted', handleExecutionComplete),
+      service.on('progress_state', handleProgressState)
+    ];
+
+    return () => {
+      // Cleanup
+      service.offById('executing', listenerIds[0]);
+      service.offById('execution_success', listenerIds[1]);
+      service.offById('execution_error', listenerIds[2]);
+      service.offById('execution_interrupted', listenerIds[3]);
+      service.offById('progress_state', listenerIds[4]);
+    };
+  }, []);
+
+  // Title editing handlers
+  const handleStartEditingTitle = () => {
+    setEditingTitleValue(selectedNode.title || '');
+    setIsEditingTitle(true);
+  };
+
+  const handleSaveTitleChange = () => {
+    if (onNodeTitleChange) {
+      onNodeTitleChange(nodeId, editingTitleValue.trim());
+    }
+    setIsEditingTitle(false);
+    setEditingTitleValue('');
+  };
+
+  const handleCancelTitleEdit = () => {
+    setIsEditingTitle(false);
+    setEditingTitleValue('');
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveTitleChange();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelTitleEdit();
+    }
+  };
+
   // Group node detection (WorkflowNode type's groupInfo property check)
   const isGroupNode = selectedNode.type === 'GROUP_NODE' && 'groupInfo' in selectedNode && selectedNode.groupInfo;
 
@@ -199,6 +582,8 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         onSelectNode={onSelectNode}
         onNodeModeChange={onNodeModeChange}
         getNodeMode={getNodeMode}
+        onGroupDelete={onGroupDelete}
+        onGroupSizeChange={onGroupSizeChange}
       />
     );
   }
@@ -229,16 +614,42 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
     };
   };
 
+  // Calculate dynamic height based on prompt execution state
+  const getNodeInspectorHeight = () => {
+    // Base header height: 64px (typical header height)
+    // Progress bar height when executing: ~80px (based on ExecutionProgressBar component)
+    // Additional padding/margins: ~16px
+    const baseHeaderHeight = 92;
+    const progressBarHeight = isPromptExecuting ? 90 : 0;
+    const totalHeaderHeight = baseHeaderHeight + progressBarHeight;
+
+    // Calculate available height (95vh - dynamic header height)
+    return `calc(95vh - ${totalHeaderHeight}px)`;
+  };
+
   return (
-    <div
-      className={`absolute bottom-0 left-0 right-0 z-50 bg-white/50 backdrop-blur-md border-t border-slate-200/40 shadow-2xl dark:bg-slate-900/50 dark:border-slate-700/40 max-h-[75vh] flex flex-col transition-all duration-300 ease-out ${
-        isNodePanelVisible
-          ? 'transform translate-y-0 opacity-100'
-          : 'transform translate-y-full opacity-0'
-      }`}
+    <motion.div
+      className="absolute bottom-0 left-0 right-0 z-50 bg-white/50 backdrop-blur-md border-t border-slate-200/40 shadow-2xl dark:bg-slate-900/50 dark:border-slate-700/40 flex flex-col"
+      initial={{ y: '100%', opacity: 0 }}
+      animate={{
+        y: isNodePanelVisible ? 0 : '100%',
+        opacity: isNodePanelVisible ? 1 : 0,
+        height: getNodeInspectorHeight()
+      }}
+      transition={{
+        type: "spring",
+        damping: 25,
+        stiffness: 300,
+        duration: isNodePanelVisible ? 0.3 : 0, // Animate only when opening
+        height: {
+          type: "tween",
+          duration: hasInitialHeightSet ? 0.3 : 0
+        }
+      }}
       style={{
         touchAction: 'pan-y pinch-zoom',
         overscrollBehaviorX: 'none',
+        maxHeight: getNodeInspectorHeight(),
         ...getColorFilter(currentBgColor)
       } as React.CSSProperties}
       onTouchStart={(e) => {
@@ -257,36 +668,138 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
       }}
     >
       {/* Fixed Header */}
-      <div className="p-4 border-b border-slate-200/50 dark:border-slate-700/50">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center space-x-2 mb-1">
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
-                  {metadata?.displayName || selectedNode.title || selectedNode.type}
-                </h3>
-              </div>
-              <div className="flex items-center space-x-4 text-sm text-slate-600 dark:text-slate-400">
-                <span>ID: {nodeId}</span>
-                <span>Type: {selectedNode.type}</span>
-                {metadata?.category && (
-                  <Badge variant="outline" className="text-xs">
-                    {metadata.category}
-                  </Badge>
+      <div className="border-b border-slate-200/50 dark:border-slate-700/50">
+        <div className="p-4">
+          <div className="max-w-4xl mx-auto">
+            {/* Title Row */}
+            <div className="flex items-center justify-between mb-1 gap-3">
+              <div className="flex items-center space-x-2 flex-1 min-w-0">
+                {isEditingTitle ? (
+                  <>
+                    <input
+                      type="text"
+                      value={editingTitleValue}
+                      onChange={(e) => setEditingTitleValue(e.target.value)}
+                      onKeyDown={handleTitleKeyDown}
+                      className="flex-1 px-2 py-1 text-lg font-semibold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter node title..."
+                      autoFocus
+                    />
+                    <Button
+                      onClick={handleSaveTitleChange}
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-100 dark:hover:bg-green-900/20"
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      onClick={handleCancelTitleEdit}
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/20"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">
+                      {metadata?.displayName || selectedNode.title || selectedNode.type}
+                    </h3>
+                    {onNodeTitleChange && (
+                      <Button
+                        onClick={handleStartEditingTitle}
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        title="Edit node title"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
-            </div>
-            <div className="flex items-center space-x-3">
+
+              {!isEditingTitle && (
+                <div className="flex items-center space-x-2 flex-shrink-0">
               {/* Refresh Button */}
               {onNodeRefresh && (
                 <Button
                   onClick={() => onNodeRefresh(nodeId)}
                   variant="ghost"
                   size="sm"
-                  className="h-10 w-10 p-0 flex-shrink-0 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-lg text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  className="h-9 w-9 p-0 flex-shrink-0 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-lg text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                   title="Refresh node input/output slots"
                 >
-                  <RefreshCw className="h-5 w-5" />
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              )}
+              {/* Color Picker Button */}
+              {onNodeColorChange && (
+                <Button
+                  onClick={() => {
+                    setIsColorPickerOpen(!isColorPickerOpen);
+                    if (!isColorPickerOpen) setIsNodeModeOpen(false); // Close node mode when opening color picker
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className={`h-9 w-9 p-0 flex-shrink-0 rounded-lg transition-all ${
+                    isColorPickerOpen
+                      ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400'
+                      : 'hover:bg-purple-100 dark:hover:bg-purple-900/20 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300'
+                  }`}
+                  title="Change node color"
+                  style={{
+                    backgroundColor: currentBgColor && !isColorPickerOpen
+                      ? `${currentBgColor}40` // 25% opacity
+                      : undefined
+                  }}
+                >
+                  <Palette className="h-4 w-4" />
+                </Button>
+              )}
+              {/* Node Mode Button */}
+              <Button
+                onClick={() => {
+                  setIsNodeModeOpen(!isNodeModeOpen);
+                  if (!isNodeModeOpen) {
+                    setIsColorPickerOpen(false); // Close color picker when opening node mode
+                    setIsNodeSizeOpen(false); // Close node size when opening node mode
+                  }
+                }}
+                variant="ghost"
+                size="sm"
+                className={`h-9 w-9 p-0 flex-shrink-0 rounded-lg transition-all ${
+                  isNodeModeOpen
+                    ? 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
+                    : 'hover:bg-orange-100 dark:hover:bg-orange-900/20 text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300'
+                }`}
+                title="Node execution mode"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+              {/* Node Size Button */}
+              {(onNodeSizeChange || onNodeCollapseChange) && (
+                <Button
+                  onClick={() => {
+                    setIsNodeSizeOpen(!isNodeSizeOpen);
+                    if (!isNodeSizeOpen) {
+                      setIsColorPickerOpen(false); // Close color picker when opening node size
+                      setIsNodeModeOpen(false); // Close node mode when opening node size
+                    }
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className={`h-9 w-9 p-0 flex-shrink-0 rounded-lg transition-all ${
+                    isNodeSizeOpen
+                      ? 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                      : 'hover:bg-indigo-100 dark:hover:bg-indigo-900/20 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300'
+                  }`}
+                  title="Node size and collapse"
+                >
+                  <Maximize2 className="h-4 w-4" />
                 </Button>
               )}
               {/* Delete Button */}
@@ -295,9 +808,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   onClick={() => setIsDeleteDialogOpen(true)}
                   variant="ghost"
                   size="sm"
-                  className="h-10 w-10 p-0 flex-shrink-0 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  className="h-9 w-9 p-0 flex-shrink-0 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-lg text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                 >
-                  <Trash2 className="h-5 w-5" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               )}
               {/* Close Button */}
@@ -305,26 +818,185 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 onClick={onClose}
                 variant="ghost"
                 size="sm"
-                className="h-10 w-10 p-0 flex-shrink-0 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                className="h-9 w-9 p-0 flex-shrink-0 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
               >
-                <span className="text-2xl leading-none">×</span>
+                <span className="text-xl leading-none">×</span>
               </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Info Row */}
+            <div className="flex items-center space-x-4 text-sm text-slate-600 dark:text-slate-400 mb-2">
+              <span>ID: {nodeId}</span>
+              <span>Type: {selectedNode.type}</span>
+              {metadata?.category && (
+                <Badge variant="outline" className="text-xs">
+                  {metadata.category}
+                </Badge>
+              )}
             </div>
           </div>
           
-          {/* Color Picker - Full Width Row */}
-          {onNodeColorChange && (
-            <div className="mt-3">
-              <ColorPicker
-                selectedColor={currentBgColor}
-                onColorChange={(color) => onNodeColorChange(nodeId, color)}
-              />
-            </div>
-          )}
-        </div>
-      </div>
+          {/* Collapsible Color Picker */}
+          <AnimatePresence>
+            {onNodeColorChange && isColorPickerOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                  <ColorPicker
+                    selectedColor={currentBgColor}
+                    onColorChange={(color) => {
+                      onNodeColorChange(nodeId, color);
+                      // Don't auto-close, let user pick multiple colors if needed
+                    }}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-      {/* Scrollable Content */}
+          {/* Collapsible Node Mode Selector */}
+          <AnimatePresence>
+            {isNodeModeOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Node Mode:</span>
+                    <SegmentedControl
+                      items={[
+                        {
+                          value: NodeMode.ALWAYS,
+                          label: 'Always',
+                          color: 'text-green-600'
+                        },
+                        {
+                          value: NodeMode.NEVER,
+                          label: 'Mute',
+                          color: 'text-blue-600'
+                        },
+                        {
+                          value: NodeMode.BYPASS,
+                          label: 'Bypass',
+                          color: 'text-purple-600'
+                        }
+                      ]}
+                      value={getNodeMode(nodeId, selectedNode.mode || 0)}
+                      onChange={(mode) => {
+                        onNodeModeChange(nodeId, mode as number);
+                        // Don't auto-close, let user see the selection
+                      }}
+                      size="md"
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Collapsible Node Size Control */}
+          <AnimatePresence>
+            {(onNodeSizeChange || onNodeCollapseChange) && isNodeSizeOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                  <NodeSizeControl
+                    selectedNode={selectedNode}
+                    onSizeChange={(width, height) => {
+                      if (onNodeSizeChange) {
+                        onNodeSizeChange(nodeId, width, height);
+                      }
+                    }}
+                    onCollapseChange={(collapsed) => {
+                      if (onNodeCollapseChange) {
+                        onNodeCollapseChange(nodeId, collapsed);
+                      }
+                    }}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Carousel Navigation */}
+        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200/50 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/50">
+          <Button
+            onClick={() => setCurrentSlide(Math.max(0, currentSlide - 1))}
+            disabled={currentSlide === 0}
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => setCurrentSlide(0)}
+              className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                currentSlide === 0
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'bg-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <ArrowDownToLine className="w-4 h-4" />
+              <span>Input Slots</span>
+            </button>
+            <button
+              onClick={() => setCurrentSlide(1)}
+              className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                currentSlide === 1
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'bg-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <Edit3 className="w-4 h-4" />
+              <span>Node Controls</span>
+            </button>
+            <button
+              onClick={() => setCurrentSlide(2)}
+              className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                currentSlide === 2
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'bg-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              <ArrowUpFromLine className="w-4 h-4" />
+              <span>Output Slots</span>
+            </button>
+          </div>
+
+          <Button
+            onClick={() => setCurrentSlide(Math.min(2, currentSlide + 1))}
+            disabled={currentSlide === 2}
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {/* Scrollable Content */}
       <div 
         className="flex-1 overflow-y-auto p-4"
         style={{
@@ -395,6 +1067,11 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             canSingleExecute={canSingleExecute}
             isSingleExecuting={isSingleExecuting}
             onSingleExecute={onSingleExecute}
+            // Carousel props
+            currentSlide={currentSlide}
+            // Link disconnection props
+            onDisconnectInput={onDisconnectInput}
+            onDisconnectOutput={onDisconnectOutput}
           />
         </div>
       </div>
@@ -413,6 +1090,6 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           onClose={() => setIsDeleteDialogOpen(false)}
         />
       )}
-    </div>
+    </motion.div>
   );
 };
