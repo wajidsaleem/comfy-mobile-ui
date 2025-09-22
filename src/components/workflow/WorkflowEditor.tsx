@@ -2190,6 +2190,71 @@ const WorkflowEditor: React.FC = () => {
                 }
               }
 
+              // Update resize changes (both node sizes and group sizes)
+              if (changes.resizeChanges && changes.resizeChanges.length > 0) {
+                changes.resizeChanges.forEach(change => {
+                  if (change.nodeId) {
+                    // Update node size
+                    if (updatedWorkflowJson.nodes && Array.isArray(updatedWorkflowJson.nodes)) {
+                      const nodeIndex = updatedWorkflowJson.nodes.findIndex((node: any) => node.id === change.nodeId);
+                      if (nodeIndex !== -1) {
+                        // Update size property directly in the workflow JSON
+                        updatedWorkflowJson.nodes[nodeIndex].size = change.newSize;
+                        // Also update position if it changed during resize
+                        updatedWorkflowJson.nodes[nodeIndex].pos = change.newPosition;
+                        console.log(`📏 Updated node ${change.nodeId} size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
+                      } else {
+                        console.warn(`Node ${change.nodeId} not found in workflow_json.nodes array for resize`);
+                      }
+                    }
+                  } else if (change.groupId) {
+                    // Update group size and position
+                    if (updatedWorkflowJson.groups && Array.isArray(updatedWorkflowJson.groups)) {
+                      const groupIndex = updatedWorkflowJson.groups.findIndex((group: any) => group.id === change.groupId);
+                      if (groupIndex !== -1) {
+                        // Update bounding array [x, y, width, height] with new values
+                        updatedWorkflowJson.groups[groupIndex].bounding = [
+                          change.newPosition[0], // x
+                          change.newPosition[1], // y
+                          change.newSize[0],     // width
+                          change.newSize[1]      // height
+                        ];
+                        console.log(`📏 Updated group ${change.groupId} size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
+                      } else {
+                        console.warn(`Group ${change.groupId} not found in workflow_json.groups array for resize`);
+                      }
+                    } else if (typeof updatedWorkflowJson.groups === 'object') {
+                      // Handle object format (alternative format)
+                      const groupKey = change.groupId.toString();
+                      if (updatedWorkflowJson.groups[groupKey]) {
+                        updatedWorkflowJson.groups[groupKey].bounding = [
+                          change.newPosition[0], // x
+                          change.newPosition[1], // y
+                          change.newSize[0],     // width
+                          change.newSize[1]      // height
+                        ];
+                        console.log(`📏 Updated group ${change.groupId} (object format) size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
+                      } else {
+                        console.warn(`Group ${change.groupId} not found in workflow_json.groups object for resize`);
+                      }
+                    }
+
+                    // Also update extra.ds.groups if it exists (ComfyUI format)
+                    if (updatedWorkflowJson.extra?.ds?.groups && Array.isArray(updatedWorkflowJson.extra.ds.groups)) {
+                      const groupIndex = updatedWorkflowJson.extra.ds.groups.findIndex((group: any) => group.id === change.groupId);
+                      if (groupIndex !== -1) {
+                        updatedWorkflowJson.extra.ds.groups[groupIndex].bounding = [
+                          change.newPosition[0], // x
+                          change.newPosition[1], // y
+                          change.newSize[0],     // width
+                          change.newSize[1]      // height
+                        ];
+                      }
+                    }
+                  }
+                });
+              }
+
               // Update the workflow with modified workflow_json
               const updatedWorkflow = {
                 ...workflow!,
@@ -2203,8 +2268,8 @@ const WorkflowEditor: React.FC = () => {
               // Update local workflow state
               setWorkflow(updatedWorkflow);              
               
-              const totalChanges = (changes.nodeChanges?.length || 0) + (changes.groupChanges?.length || 0);
-              console.log(`📍 Repositioning applied successfully: ${changes.nodeChanges?.length || 0} nodes and ${changes.groupChanges?.length || 0} groups updated (${totalChanges} total)`);
+              const totalChanges = (changes.nodeChanges?.length || 0) + (changes.groupChanges?.length || 0) + (changes.resizeChanges?.length || 0);
+              console.log(`📍 Repositioning applied successfully: ${changes.nodeChanges?.length || 0} nodes, ${changes.groupChanges?.length || 0} groups, and ${changes.resizeChanges?.length || 0} resize changes updated (${totalChanges} total)`);
 
               await loadWorkflow();
               

@@ -60,6 +60,13 @@ export interface RenderingOptions {
     selectedNodeId: number | null;
     selectedGroupId: number | null;
     gridSnapEnabled: boolean;
+    resizeMode?: {
+      isActive: boolean;
+      gripperType: 'corner' | 'edge';
+      gripperPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom' | 'left' | 'right';
+      originalSize: [number, number];
+      originalPosition: [number, number];
+    };
   } | null; // Repositioning mode information
   connectionMode?: {
     isActive: boolean;
@@ -308,6 +315,13 @@ export function renderGroups(
     selectedNodeId: number | null;
     selectedGroupId: number | null;
     gridSnapEnabled: boolean;
+    resizeMode?: {
+      isActive: boolean;
+      gripperType: 'corner' | 'edge';
+      gripperPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom' | 'left' | 'right';
+      originalSize: [number, number];
+      originalPosition: [number, number];
+    };
   } | null
 ): void {
   for (const group of groupBounds) {
@@ -373,6 +387,19 @@ export function renderGroups(
       }
       
       ctx.fillText(truncatedTitle, titleX, titleY);
+    }
+
+    // Draw resize grippers if this group is selected in repositioning mode
+    if (repositionMode?.isActive && group.id !== undefined &&
+        repositionMode.selectedGroupId === group.id && !repositionMode?.resizeMode?.isActive) {
+      drawResizeGrippers(
+        ctx,
+        group.x,
+        group.y,
+        group.width,
+        group.height,
+        viewportScale || 1
+      );
     }
   }
 }
@@ -943,6 +970,18 @@ export function renderNodes(
     
     // Restore context state (especially important for bypassed nodes with opacity)
     ctx.restore();
+
+    // Draw resize grippers if this node is selected in repositioning mode (but not if collapsed)
+    if (isRepositionSelected && !repositionMode?.resizeMode?.isActive && !isCollapsed) {
+      drawResizeGrippers(
+        ctx,
+        bounds.x,
+        bounds.y,
+        bounds.width,
+        bounds.height,
+        viewportScale || 1
+      );
+    }
   }
 
   // Long press visual feedback is now handled by DOM overlay in WorkflowCanvas
@@ -1026,6 +1065,148 @@ export function drawRepositioningGrid(
   
   // Reset line dash
   ctx.setLineDash([]);
+}
+
+/**
+ * Draw resize grippers for selected node/group in repositioning mode
+ */
+export function drawResizeGrippers(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  viewportScale: number = 1
+): void {
+  const gripperSize = 16; // Base gripper size in screen pixels
+  const actualGripperSize = gripperSize / viewportScale; // Adjust for viewport scale
+  const halfGripper = actualGripperSize / 2;
+
+  // Gripper style
+  ctx.fillStyle = '#3b82f6'; // Blue color matching selection border
+  ctx.strokeStyle = '#ffffff'; // White border for visibility
+  ctx.lineWidth = 1 / viewportScale; // Adjust line width for viewport scale
+
+  // Calculate gripper positions
+  const grippers = [
+    // Corners (allow both width and height resize)
+    { x: x - halfGripper, y: y - halfGripper, position: 'top-left' },
+    { x: x + width - halfGripper, y: y - halfGripper, position: 'top-right' },
+    { x: x - halfGripper, y: y + height - halfGripper, position: 'bottom-left' },
+    { x: x + width - halfGripper, y: y + height - halfGripper, position: 'bottom-right' },
+
+    // Edges (allow single dimension resize)
+    { x: x + width / 2 - halfGripper, y: y - halfGripper, position: 'top' },
+    { x: x + width / 2 - halfGripper, y: y + height - halfGripper, position: 'bottom' },
+    { x: x - halfGripper, y: y + height / 2 - halfGripper, position: 'left' },
+    { x: x + width - halfGripper, y: y + height / 2 - halfGripper, position: 'right' },
+  ];
+
+  // Draw each gripper
+  for (const gripper of grippers) {
+    ctx.fillRect(gripper.x, gripper.y, actualGripperSize, actualGripperSize);
+    ctx.strokeRect(gripper.x, gripper.y, actualGripperSize, actualGripperSize);
+  }
+}
+
+/**
+ * Check if a point intersects with any resize gripper
+ */
+export function getGripperAtPoint(
+  x: number,
+  y: number,
+  nodeX: number,
+  nodeY: number,
+  nodeWidth: number,
+  nodeHeight: number,
+  viewportScale: number = 1
+): { position: string; type: 'corner' | 'edge' } | null {
+  const gripperSize = 16; // Base gripper size in screen pixels
+  const actualGripperSize = gripperSize / viewportScale;
+  const halfGripper = actualGripperSize / 2;
+  const hitTestSize = Math.max(actualGripperSize, 32 / viewportScale); // Minimum 32px hit area for better touch
+  const halfHitTest = hitTestSize / 2;
+
+  // Define grippers with hit test areas
+  const grippers = [
+    // Corners
+    {
+      x: nodeX - halfHitTest,
+      y: nodeY - halfHitTest,
+      width: hitTestSize,
+      height: hitTestSize,
+      position: 'top-left',
+      type: 'corner' as const
+    },
+    {
+      x: nodeX + nodeWidth - halfHitTest,
+      y: nodeY - halfHitTest,
+      width: hitTestSize,
+      height: hitTestSize,
+      position: 'top-right',
+      type: 'corner' as const
+    },
+    {
+      x: nodeX - halfHitTest,
+      y: nodeY + nodeHeight - halfHitTest,
+      width: hitTestSize,
+      height: hitTestSize,
+      position: 'bottom-left',
+      type: 'corner' as const
+    },
+    {
+      x: nodeX + nodeWidth - halfHitTest,
+      y: nodeY + nodeHeight - halfHitTest,
+      width: hitTestSize,
+      height: hitTestSize,
+      position: 'bottom-right',
+      type: 'corner' as const
+    },
+
+    // Edges
+    {
+      x: nodeX + nodeWidth / 2 - halfHitTest,
+      y: nodeY - halfHitTest,
+      width: hitTestSize,
+      height: hitTestSize,
+      position: 'top',
+      type: 'edge' as const
+    },
+    {
+      x: nodeX + nodeWidth / 2 - halfHitTest,
+      y: nodeY + nodeHeight - halfHitTest,
+      width: hitTestSize,
+      height: hitTestSize,
+      position: 'bottom',
+      type: 'edge' as const
+    },
+    {
+      x: nodeX - halfHitTest,
+      y: nodeY + nodeHeight / 2 - halfHitTest,
+      width: hitTestSize,
+      height: hitTestSize,
+      position: 'left',
+      type: 'edge' as const
+    },
+    {
+      x: nodeX + nodeWidth - halfHitTest,
+      y: nodeY + nodeHeight / 2 - halfHitTest,
+      width: hitTestSize,
+      height: hitTestSize,
+      position: 'right',
+      type: 'edge' as const
+    },
+  ];
+
+  // Check each gripper
+  for (const gripper of grippers) {
+    if (x >= gripper.x && x <= gripper.x + gripper.width &&
+        y >= gripper.y && y <= gripper.y + gripper.height) {
+      return { position: gripper.position, type: gripper.type };
+    }
+  }
+
+  return null;
 }
 
 /**

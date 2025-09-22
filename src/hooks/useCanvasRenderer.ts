@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { IComfyWorkflow } from '@/shared/types/app/IComfyWorkflow';
 import type { IComfyGraphNode } from '@/shared/types/app/base';
 import { DEFAULT_CANVAS_CONFIG, CanvasConfig } from '@/config/canvasConfig';
-import { 
-  renderGroups, 
-  renderConnections, 
+import {
+  renderGroups,
+  renderConnections,
   renderNodes,
   drawGridPattern,
   drawRepositioningGrid,
+  drawResizeGrippers,
+  getGripperAtPoint,
   NodeBounds,
   GroupBounds,
   ViewportTransform,

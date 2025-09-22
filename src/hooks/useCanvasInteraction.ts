@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { WorkflowNode } from '@/shared/types/app/IComfyWorkflow';
 import type { GroupBounds } from '@/shared/utils/rendering/CanvasRendererService';
 import { mapGroupsWithNodes, Group } from '@/utils/GroupNodeMapper';
+import { getGripperAtPoint } from '@/shared/utils/rendering/CanvasRendererService';
 import { toast } from 'sonner';
 
 interface ViewportTransform {
@@ -49,6 +50,13 @@ interface RepositionMode {
   currentPosition: [number, number] | null;
   gridSnapEnabled: boolean;
   originalNodePositions: Map<number, [number, number]>; // Store original positions of nodes in selected group
+  resizeMode?: {
+    isActive: boolean;
+    gripperType: 'corner' | 'edge';
+    gripperPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom' | 'left' | 'right';
+    originalSize: [number, number];
+    originalPosition: [number, number];
+  };
 }
 
 interface UseCanvasInteractionProps {
@@ -146,6 +154,16 @@ export const useCanvasInteraction = ({
   
   const [groupChanges, setGroupChanges] = useState<Array<{
     groupId: number;
+    newPosition: [number, number];
+    originalPosition: [number, number];
+  }>>([]);
+
+  // tracking resize changes
+  const [resizeChanges, setResizeChanges] = useState<Array<{
+    nodeId?: number;
+    groupId?: number;
+    newSize: [number, number];
+    originalSize: [number, number];
     newPosition: [number, number];
     originalPosition: [number, number];
   }>>([]);
@@ -332,7 +350,35 @@ export const useCanvasInteraction = ({
 
     // In repositioning mode, handle node/group selection immediately on mouse down
     if (repositionMode.isActive) {
-      if (clickedNode) {
+      // First check if clicking on a gripper of the currently selected node/group
+      let clickedGripper: { position: string; type: 'corner' | 'edge' } | null = null;
+
+      if (repositionMode.selectedNodeId && clickedNode && (clickedNode as WorkflowNode).id === repositionMode.selectedNodeId) {
+        // Check for gripper on selected node (but skip if collapsed)
+        const bounds = nodeBounds.get(repositionMode.selectedNodeId);
+        if (bounds) {
+          const isCollapsed = bounds.node.flags?.collapsed === true;
+          if (!isCollapsed) {
+            clickedGripper = getGripperAtPoint(
+              worldX, worldY,
+              bounds.x, bounds.y, bounds.width, bounds.height,
+              viewport.scale
+            );
+          }
+        }
+      } else if (repositionMode.selectedGroupId && clickedGroup && clickedGroup.id === repositionMode.selectedGroupId) {
+        // Check for gripper on selected group
+        clickedGripper = getGripperAtPoint(
+          worldX, worldY,
+          clickedGroup.x, clickedGroup.y, clickedGroup.width, clickedGroup.height,
+          viewport.scale
+        );
+      }
+
+      if (clickedGripper) {
+        // Start resize mode
+        startResize(clickedGripper.type, clickedGripper.position as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom' | 'left' | 'right');
+      } else if (clickedNode) {
         // Select node for repositioning immediately on mouse down
         selectNodeForRepositioning((clickedNode as WorkflowNode).id);
       } else if (clickedGroup && (clickedGroup as GroupBounds).id !== undefined) {
@@ -369,7 +415,86 @@ export const useCanvasInteraction = ({
     });
   };
 
+  // Handle cursor feedback when hovering over grippers
+  const handleMouseHover = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !repositionMode.isActive) {
+      // Reset cursor if not in repositioning mode
+      canvas.style.cursor = '';
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Transform to world coordinates
+    const worldX = (x - viewport.x) / viewport.scale;
+    const worldY = (y - viewport.y) / viewport.scale;
+
+    let cursor = '';
+
+    // Check if hovering over gripper of selected node (but skip if collapsed)
+    if (repositionMode.selectedNodeId) {
+      const bounds = nodeBounds.get(repositionMode.selectedNodeId);
+      if (bounds) {
+        const isCollapsed = bounds.node.flags?.collapsed === true;
+        if (!isCollapsed) {
+          const gripper = getGripperAtPoint(
+            worldX, worldY,
+            bounds.x, bounds.y, bounds.width, bounds.height,
+            viewport.scale
+          );
+          if (gripper) {
+            cursor = getGripperCursor(gripper.position);
+          }
+        }
+      }
+    }
+
+    // Check if hovering over gripper of selected group
+    if (!cursor && repositionMode.selectedGroupId) {
+      const groupBound = groupBounds.find(g => g.id === repositionMode.selectedGroupId);
+      if (groupBound) {
+        const gripper = getGripperAtPoint(
+          worldX, worldY,
+          groupBound.x, groupBound.y, groupBound.width, groupBound.height,
+          viewport.scale
+        );
+        if (gripper) {
+          cursor = getGripperCursor(gripper.position);
+        }
+      }
+    }
+
+    // Apply cursor
+    canvas.style.cursor = cursor;
+  };
+
+  // Helper function to get cursor for gripper position
+  const getGripperCursor = (position: string): string => {
+    switch (position) {
+      case 'top-left':
+      case 'bottom-right':
+        return 'nw-resize';
+      case 'top-right':
+      case 'bottom-left':
+        return 'ne-resize';
+      case 'top':
+      case 'bottom':
+        return 'n-resize';
+      case 'left':
+      case 'right':
+        return 'e-resize';
+      default:
+        return '';
+    }
+  };
+
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Handle cursor feedback
+    handleMouseHover(e);
+
     if (!mouseDownInfo) return;
 
     // Check long press movement tolerance
@@ -397,10 +522,13 @@ export const useCanvasInteraction = ({
     if (isDragging) {
       
       // Check if we're in repositioning mode with a selected node or group
-      if (repositionMode.isActive && repositionMode.originalPosition) {
-        if (repositionMode.selectedNodeId && mouseDownInfo.clickedNode?.id === repositionMode.selectedNodeId) {
+      if (repositionMode.isActive) {
+        // Handle resize mode
+        if (repositionMode.resizeMode?.isActive) {
+          handleResize(e.clientX - mouseDownInfo.x, e.clientY - mouseDownInfo.y);
+        } else if (repositionMode.originalPosition && repositionMode.selectedNodeId && mouseDownInfo.clickedNode?.id === repositionMode.selectedNodeId) {
           // Repositioning mode - move the selected node using relative movement
-          
+
           // Calculate mouse movement delta from mouse down position
           const deltaX = e.clientX - mouseDownInfo.x;
           const deltaY = e.clientY - mouseDownInfo.y;
@@ -410,8 +538,8 @@ export const useCanvasInteraction = ({
           const worldDeltaY = deltaY / viewport.scale;
 
           // Calculate new node position based on original position + delta
-          const newX = repositionMode.originalPosition[0] + worldDeltaX;
-          const newY = repositionMode.originalPosition[1] + worldDeltaY;
+          const newX = repositionMode.originalPosition![0] + worldDeltaX;
+          const newY = repositionMode.originalPosition![1] + worldDeltaY;
 
           // Apply smooth position calculation
           const [finalX, finalY] = calculateSmoothPosition(newX, newY);
@@ -426,7 +554,7 @@ export const useCanvasInteraction = ({
           updateNodePositionInBounds(repositionMode.selectedNodeId, finalX, finalY);
         } else if (repositionMode.selectedGroupId && mouseDownInfo.clickedGroup?.id === repositionMode.selectedGroupId) {
           // Repositioning mode - move the selected group using relative movement
-          
+
           // Calculate mouse movement delta from mouse down position
           const deltaX = e.clientX - mouseDownInfo.x;
           const deltaY = e.clientY - mouseDownInfo.y;
@@ -436,8 +564,8 @@ export const useCanvasInteraction = ({
           const worldDeltaY = deltaY / viewport.scale;
 
           // Calculate new group position based on original position + delta
-          const newX = repositionMode.originalPosition[0] + worldDeltaX;
-          const newY = repositionMode.originalPosition[1] + worldDeltaY;
+          const newX = repositionMode.originalPosition![0] + worldDeltaX;
+          const newY = repositionMode.originalPosition![1] + worldDeltaY;
 
           // Apply smooth position calculation
           const [finalX, finalY] = calculateSmoothPosition(newX, newY);
@@ -450,12 +578,22 @@ export const useCanvasInteraction = ({
 
           // Update group position in bounds for real-time rendering
           updateGroupPositionInBounds(repositionMode.selectedGroupId, finalX, finalY);
+        } else {
+          // Repositioning mode but no node/group selected - move the viewport/canvas
+          const deltaX = e.clientX - mouseDownInfo.x;
+          const deltaY = e.clientY - mouseDownInfo.y;
+
+          setViewport({
+            ...viewport,
+            x: mouseDownInfo.initialViewport.x + deltaX,
+            y: mouseDownInfo.initialViewport.y + deltaY
+          });
         }
       } else {
         // Normal mode - move the viewport/canvas
         const deltaX = e.clientX - mouseDownInfo.x;
         const deltaY = e.clientY - mouseDownInfo.y;
-        
+
         setViewport({
           ...viewport,
           x: mouseDownInfo.initialViewport.x + deltaX,
@@ -469,6 +607,58 @@ export const useCanvasInteraction = ({
     // Clear long press only if it's still in progress (not completed)
     if (longPressState.isActive && longPressState.timeoutId) {
       clearLongPress();
+    }
+
+    // Exit resize mode if active and save changes
+    if (repositionMode.resizeMode?.isActive) {
+      const { originalSize, originalPosition } = repositionMode.resizeMode;
+
+      // Get current size and position after resize
+      let currentSize: [number, number] = [0, 0];
+      let currentPosition: [number, number] = [0, 0];
+      let nodeId: number | undefined;
+      let groupId: number | undefined;
+
+      if (repositionMode.selectedNodeId) {
+        nodeId = repositionMode.selectedNodeId;
+        const bounds = nodeBounds.get(repositionMode.selectedNodeId);
+        if (bounds) {
+          currentSize = [bounds.width, bounds.height];
+          currentPosition = [bounds.x, bounds.y];
+        }
+      } else if (repositionMode.selectedGroupId) {
+        groupId = repositionMode.selectedGroupId;
+        const group = groupBounds.find(g => g.id === repositionMode.selectedGroupId);
+        if (group) {
+          currentSize = [group.width, group.height];
+          currentPosition = [group.x, group.y];
+        }
+      }
+
+      // Only add to changes if size or position actually changed
+      if (currentSize[0] !== originalSize[0] || currentSize[1] !== originalSize[1] ||
+          currentPosition[0] !== originalPosition[0] || currentPosition[1] !== originalPosition[1]) {
+        setResizeChanges(prev => {
+          // Remove any existing resize change for this node/group
+          const filtered = prev.filter(change =>
+            (nodeId && change.nodeId !== nodeId) || (groupId && change.groupId !== groupId)
+          );
+
+          return [...filtered, {
+            nodeId,
+            groupId,
+            newSize: currentSize,
+            originalSize,
+            newPosition: currentPosition,
+            originalPosition
+          }];
+        });
+      }
+
+      setRepositionMode(prev => ({
+        ...prev,
+        resizeMode: undefined
+      }));
     }
     
     // If we weren't dragging and had a mouse down, handle click/double-click logic
@@ -575,6 +765,53 @@ export const useCanvasInteraction = ({
       // Transform to world coordinates
       const worldX = (x - viewport.x) / viewport.scale;
       const worldY = (y - viewport.y) / viewport.scale;
+
+      // First check if touching on a gripper (in repositioning mode)
+      let touchedGripper: { position: string; type: 'corner' | 'edge' } | null = null;
+      if (repositionMode.isActive) {
+        // Check gripper on selected node (but skip if collapsed)
+        if (repositionMode.selectedNodeId) {
+          const bounds = nodeBounds.get(repositionMode.selectedNodeId);
+          if (bounds) {
+            const isCollapsed = bounds.node.flags?.collapsed === true;
+            if (!isCollapsed) {
+              touchedGripper = getGripperAtPoint(
+                worldX, worldY,
+                bounds.x, bounds.y, bounds.width, bounds.height,
+                viewport.scale
+              );
+            }
+          }
+        }
+        // Check gripper on selected group (if no node gripper found)
+        if (!touchedGripper && repositionMode.selectedGroupId) {
+          const groupBound = groupBounds.find(g => g.id === repositionMode.selectedGroupId);
+          if (groupBound) {
+            touchedGripper = getGripperAtPoint(
+              worldX, worldY,
+              groupBound.x, groupBound.y, groupBound.width, groupBound.height,
+              viewport.scale
+            );
+          }
+        }
+      }
+
+      // If gripper is touched, start resize mode immediately and skip node/group detection
+      if (touchedGripper) {
+        startResize(touchedGripper.type, touchedGripper.position as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom' | 'left' | 'right');
+
+        // Store touch information for resize mode
+        setTouchStart({
+          x: touch.clientX,
+          y: touch.clientY,
+          identifier: touch.identifier,
+          startTime: Date.now(),
+          touchedNode: null, // No node touched, this is a gripper touch
+          touchedGroup: null,
+          initialViewport: { x: viewport.x, y: viewport.y }
+        });
+        return; // Exit early, skip normal node/group detection
+      }
 
       // Check if touching a node (using Z-order priority)
       let touchedNode: WorkflowNode | null = null;
@@ -732,9 +969,12 @@ export const useCanvasInteraction = ({
       // Continue dragging if already started 
       if (isDragging) {
         // Check if we're in repositioning mode with a selected node or group
-        if (repositionMode.isActive && repositionMode.originalPosition) {
-          if (repositionMode.selectedNodeId && touchStart.touchedNode?.id === repositionMode.selectedNodeId) {
-            // Repositioning mode - move the selected node using relative movement 
+        if (repositionMode.isActive) {
+          // Handle resize mode
+          if (repositionMode.resizeMode?.isActive) {
+            handleResize(touch.clientX - touchStart.x, touch.clientY - touchStart.y);
+          } else if (repositionMode.originalPosition && repositionMode.selectedNodeId && touchStart.touchedNode?.id === repositionMode.selectedNodeId) {
+            // Repositioning mode - move the selected node using relative movement
 
             // Calculate movement delta from touch start position
             const deltaX = touch.clientX - touchStart.x;
@@ -745,8 +985,8 @@ export const useCanvasInteraction = ({
             const worldDeltaY = deltaY / viewport.scale;
 
             // Calculate new node position based on original position + delta
-            const newX = repositionMode.originalPosition[0] + worldDeltaX;
-            const newY = repositionMode.originalPosition[1] + worldDeltaY;
+            const newX = repositionMode.originalPosition![0] + worldDeltaX;
+            const newY = repositionMode.originalPosition![1] + worldDeltaY;
 
             // Apply smooth position calculation
             const [finalX, finalY] = calculateSmoothPosition(newX, newY);
@@ -771,8 +1011,8 @@ export const useCanvasInteraction = ({
             const worldDeltaY = deltaY / viewport.scale;
 
             // Calculate new group position based on original position + delta
-            const newX = repositionMode.originalPosition[0] + worldDeltaX;
-            const newY = repositionMode.originalPosition[1] + worldDeltaY;
+            const newX = repositionMode.originalPosition![0] + worldDeltaX;
+            const newY = repositionMode.originalPosition![1] + worldDeltaY;
 
             // Apply smooth position calculation
             const [finalX, finalY] = calculateSmoothPosition(newX, newY);
@@ -785,9 +1025,19 @@ export const useCanvasInteraction = ({
 
             // Update group position in bounds for real-time rendering
             updateGroupPositionInBounds(repositionMode.selectedGroupId, finalX, finalY);
+          } else {
+            // Repositioning mode but no node/group selected - move the viewport/canvas
+            const deltaX = touch.clientX - touchStart.x;
+            const deltaY = touch.clientY - touchStart.y;
+
+            setViewport({
+              ...viewport,
+              x: touchStart.initialViewport.x + deltaX,
+              y: touchStart.initialViewport.y + deltaY
+            });
           }
         } else {
-          // Normal mode - move the viewport/canvas 
+          // Normal mode - move the viewport/canvas
           const deltaX = touch.clientX - touchStart.x;
           const deltaY = touch.clientY - touchStart.y;
 
@@ -840,6 +1090,58 @@ export const useCanvasInteraction = ({
     // Clear long press when touch ends or if multiple touches detected
     if (longPressState.isActive) {
       clearLongPress();
+    }
+
+    // Exit resize mode if active and save changes
+    if (repositionMode.resizeMode?.isActive) {
+      const { originalSize, originalPosition } = repositionMode.resizeMode;
+
+      // Get current size and position after resize
+      let currentSize: [number, number] = [0, 0];
+      let currentPosition: [number, number] = [0, 0];
+      let nodeId: number | undefined;
+      let groupId: number | undefined;
+
+      if (repositionMode.selectedNodeId) {
+        nodeId = repositionMode.selectedNodeId;
+        const bounds = nodeBounds.get(repositionMode.selectedNodeId);
+        if (bounds) {
+          currentSize = [bounds.width, bounds.height];
+          currentPosition = [bounds.x, bounds.y];
+        }
+      } else if (repositionMode.selectedGroupId) {
+        groupId = repositionMode.selectedGroupId;
+        const group = groupBounds.find(g => g.id === repositionMode.selectedGroupId);
+        if (group) {
+          currentSize = [group.width, group.height];
+          currentPosition = [group.x, group.y];
+        }
+      }
+
+      // Only add to changes if size or position actually changed
+      if (currentSize[0] !== originalSize[0] || currentSize[1] !== originalSize[1] ||
+          currentPosition[0] !== originalPosition[0] || currentPosition[1] !== originalPosition[1]) {
+        setResizeChanges(prev => {
+          // Remove any existing resize change for this node/group
+          const filtered = prev.filter(change =>
+            (nodeId && change.nodeId !== nodeId) || (groupId && change.groupId !== groupId)
+          );
+
+          return [...filtered, {
+            nodeId,
+            groupId,
+            newSize: currentSize,
+            originalSize,
+            newPosition: currentPosition,
+            originalPosition
+          }];
+        });
+      }
+
+      setRepositionMode(prev => ({
+        ...prev,
+        resizeMode: undefined
+      }));
     }
     
     if (e.touches.length === 0) {
@@ -1133,6 +1435,51 @@ export const useCanvasInteraction = ({
     }
   };
 
+  // Update node size and position in nodeBounds for real-time rendering
+  const updateNodeSizeInBounds = (nodeId: number, width: number, height: number, x?: number, y?: number) => {
+    setNodeBounds(prevBounds => {
+      const newBounds = new Map(prevBounds);
+      const bounds = newBounds.get(nodeId);
+      if (!bounds) return prevBounds;
+
+      // Update the node bounds for real-time rendering
+      const updatedBounds = {
+        ...bounds,
+        width,
+        height,
+        x: x !== undefined ? x : bounds.x,
+        y: y !== undefined ? y : bounds.y,
+        node: {
+          ...bounds.node,
+          size: [width, height] as [number, number],
+          pos: [x !== undefined ? x : bounds.x, y !== undefined ? y : bounds.y] as [number, number]
+        }
+      };
+
+      // Update nodeBounds map (this triggers re-render)
+      newBounds.set(nodeId, updatedBounds);
+      return newBounds;
+    });
+  };
+
+  // Update group size and position in groupBounds for real-time rendering
+  const updateGroupSizeInBounds = (groupId: number, width: number, height: number, x?: number, y?: number) => {
+    setGroupBounds(prevBounds => {
+      return prevBounds.map(bounds => {
+        if (bounds.id === groupId) {
+          return {
+            ...bounds,
+            width,
+            height,
+            x: x !== undefined ? x : bounds.x,
+            y: y !== undefined ? y : bounds.y
+          };
+        }
+        return bounds;
+      });
+    });
+  };
+
   // Repositioning mode control functions
   const enterRepositionMode = () => {
     setRepositionMode({
@@ -1324,6 +1671,106 @@ export const useCanvasInteraction = ({
     return true;
   };
 
+  const startResize = (gripperType: 'corner' | 'edge', gripperPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom' | 'left' | 'right') => {
+    if (!repositionMode.isActive) return;
+
+    let originalSize: [number, number] = [0, 0];
+    let originalPosition: [number, number] = [0, 0];
+
+    if (repositionMode.selectedNodeId) {
+      const bounds = nodeBounds.get(repositionMode.selectedNodeId);
+      if (bounds) {
+        originalSize = [bounds.width, bounds.height];
+        originalPosition = [bounds.x, bounds.y];
+      }
+    } else if (repositionMode.selectedGroupId) {
+      const group = groupBounds.find(g => g.id === repositionMode.selectedGroupId);
+      if (group) {
+        originalSize = [group.width, group.height];
+        originalPosition = [group.x, group.y];
+      }
+    }
+
+    setRepositionMode(prev => ({
+      ...prev,
+      resizeMode: {
+        isActive: true,
+        gripperType,
+        gripperPosition,
+        originalSize,
+        originalPosition
+      }
+    }));
+  };
+
+  const handleResize = (deltaX: number, deltaY: number) => {
+    if (!repositionMode.resizeMode?.isActive) return;
+
+    const { gripperType, gripperPosition, originalSize, originalPosition } = repositionMode.resizeMode;
+
+    // Convert delta to world coordinates
+    const worldDeltaX = deltaX / viewport.scale;
+    const worldDeltaY = deltaY / viewport.scale;
+
+    let newWidth = originalSize[0];
+    let newHeight = originalSize[1];
+    let newX = originalPosition[0];
+    let newY = originalPosition[1];
+
+    // Calculate new dimensions based on gripper position
+    switch (gripperPosition) {
+      case 'top-left':
+        newWidth = Math.max(80, originalSize[0] - worldDeltaX);
+        newHeight = Math.max(30, originalSize[1] - worldDeltaY);
+        newX = originalPosition[0] + (originalSize[0] - newWidth);
+        newY = originalPosition[1] + (originalSize[1] - newHeight);
+        break;
+      case 'top-right':
+        newWidth = Math.max(80, originalSize[0] + worldDeltaX);
+        newHeight = Math.max(30, originalSize[1] - worldDeltaY);
+        newY = originalPosition[1] + (originalSize[1] - newHeight);
+        break;
+      case 'bottom-left':
+        newWidth = Math.max(80, originalSize[0] - worldDeltaX);
+        newHeight = Math.max(30, originalSize[1] + worldDeltaY);
+        newX = originalPosition[0] + (originalSize[0] - newWidth);
+        break;
+      case 'bottom-right':
+        newWidth = Math.max(80, originalSize[0] + worldDeltaX);
+        newHeight = Math.max(30, originalSize[1] + worldDeltaY);
+        break;
+      case 'top':
+        newHeight = Math.max(30, originalSize[1] - worldDeltaY);
+        newY = originalPosition[1] + (originalSize[1] - newHeight);
+        break;
+      case 'bottom':
+        newHeight = Math.max(30, originalSize[1] + worldDeltaY);
+        break;
+      case 'left':
+        newWidth = Math.max(80, originalSize[0] - worldDeltaX);
+        newX = originalPosition[0] + (originalSize[0] - newWidth);
+        break;
+      case 'right':
+        newWidth = Math.max(80, originalSize[0] + worldDeltaX);
+        break;
+    }
+
+    // Apply grid snap if enabled
+    if (repositionMode.gridSnapEnabled) {
+      newWidth = snapToGrid(newWidth);
+      newHeight = snapToGrid(newHeight);
+      newX = snapToGrid(newX);
+      newY = snapToGrid(newY);
+    }
+
+    // Update the target node or group
+    if (repositionMode.selectedNodeId) {
+      updateNodeSizeInBounds(repositionMode.selectedNodeId, newWidth, newHeight, newX, newY);
+    } else if (repositionMode.selectedGroupId) {
+      updateGroupSizeInBounds(repositionMode.selectedGroupId, newWidth, newHeight, newX, newY);
+    }
+  };
+
   const exitRepositionMode = () => {
     setRepositionMode({
       isActive: false,
@@ -1344,11 +1791,32 @@ export const useCanvasInteraction = ({
   };
 
   const cancelReposition = () => {
+    // Restore resize changes
+    resizeChanges.forEach(change => {
+      if (change.nodeId) {
+        updateNodeSizeInBounds(
+          change.nodeId,
+          change.originalSize[0],
+          change.originalSize[1],
+          change.originalPosition[0],
+          change.originalPosition[1]
+        );
+      } else if (change.groupId) {
+        updateGroupSizeInBounds(
+          change.groupId,
+          change.originalSize[0],
+          change.originalSize[1],
+          change.originalPosition[0],
+          change.originalPosition[1]
+        );
+      }
+    });
+
     // Restore selected group to its original position (if any)
     if (repositionMode.selectedGroupId && repositionMode.originalPosition) {
       updateGroupPositionInBounds(repositionMode.selectedGroupId, repositionMode.originalPosition[0], repositionMode.originalPosition[1]);
     }
-    
+
     // Restore all nodes in the selected group to their original positions
     repositionMode.originalNodePositions.forEach((originalPos, nodeId) => {
       updateNodePositionInBounds(nodeId, originalPos[0], originalPos[1]);
@@ -1362,6 +1830,7 @@ export const useCanvasInteraction = ({
     // reset tracking arrays
     setNodeChanges([]);
     setGroupChanges([]);
+    setResizeChanges([]);
 
     exitRepositionMode();
   };
@@ -1374,14 +1843,16 @@ export const useCanvasInteraction = ({
     // return tracking arrays
     const changes = {
       nodeChanges: [...nodeChanges],
-      groupChanges: [...groupChanges]
+      groupChanges: [...groupChanges],
+      resizeChanges: [...resizeChanges]
     };
 
     // reset tracking arrays
     setNodeChanges([]);
     setGroupChanges([]);
+    setResizeChanges([]);
     exitRepositionMode();
-    
+
     return changes;
   };
 
