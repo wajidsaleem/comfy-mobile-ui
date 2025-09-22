@@ -475,6 +475,19 @@ function preprocessGraphWidgets(graph: any): void {
         }
       }
     }
+
+    // Process date format strings in _widgets array (new approach)
+    if (Array.isArray(node._widgets)) {
+      for (const widget of node._widgets) {
+        if (typeof widget.value === 'string' && widget.value.includes('%date:')) {
+          const processedValue = processDateFormatString(widget.value);
+          if (widget.value !== processedValue) {
+            console.log(`📅 Converting date format in widget "${widget.name}": "${widget.value}" -> "${processedValue}"`);
+            widget.value = processedValue;
+          }
+        }
+      }
+    }
   }
 }
 
@@ -1406,8 +1419,17 @@ function processNodeWidgetInputs(node: any, apiNodeInputs: Record<string, any>):
 
       // Only use widget value if the input is not connected
       if (!correspondingInput) {
-        apiNodeInputs[widget.name] = widget.value;
-        console.log(`  ✅ Widget ${widget.name} = ${widget.value} (disconnected)`);
+        // Apply date format conversion if needed
+        let finalValue = widget.value;
+        if (typeof widget.value === 'string' && widget.value.includes('%date:')) {
+          finalValue = processDateFormatString(widget.value);
+          if (finalValue !== widget.value) {
+            console.log(`  📅 Converted date format in widget "${widget.name}": "${widget.value}" -> "${finalValue}"`);
+          }
+        }
+
+        apiNodeInputs[widget.name] = finalValue;
+        console.log(`  ✅ Widget ${widget.name} = ${finalValue} (disconnected)`);
       } else {
         console.log(`  ⏭️ Widget ${widget.name} skipped (input connected to link ${correspondingInput.link})`);
       }
