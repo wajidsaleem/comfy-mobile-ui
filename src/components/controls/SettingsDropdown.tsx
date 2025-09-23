@@ -1,5 +1,6 @@
+import { Badge } from '@/components/ui/badge';
 import React, { forwardRef } from 'react';
-import { Loader2, Dices, Users, FileJson, Database, Hash, Camera, Brush, Move, Link } from 'lucide-react';
+import { Loader2, Dices, Users, FileJson, Database, Hash, Camera, Brush, Move, Link, AlertTriangle } from 'lucide-react';
 
 interface SettingsDropdownProps {
   isOpen: boolean;
@@ -22,9 +23,12 @@ interface SettingsDropdownProps {
     isActive: boolean;
   };
   onToggleConnectionMode?: () => void;
+  missingNodesCount?: number;
+  installablePackageCount?: number;
+  onShowMissingNodeInstaller?: () => void;
 }
 
-export const SettingsDropdown = forwardRef<HTMLDivElement, SettingsDropdownProps>(({
+export const SettingsDropdown = forwardRef<HTMLDivElement, SettingsDropdownProps>(({ 
   isOpen,
   isClearingVRAM,
   isExecuting,
@@ -39,6 +43,9 @@ export const SettingsDropdown = forwardRef<HTMLDivElement, SettingsDropdownProps
   onToggleRepositionMode,
   connectionMode,
   onToggleConnectionMode,
+  missingNodesCount = 0,
+  installablePackageCount = 0,
+  onShowMissingNodeInstaller,
 }, ref) => {
   if (!isOpen) return null;
 
@@ -58,8 +65,22 @@ export const SettingsDropdown = forwardRef<HTMLDivElement, SettingsDropdownProps
         {/* Content container - EXACTLY like QuickActionPanel */}
         <div className="relative z-10">
           {/* Group 1: Workflow Tools */}
-          {(onShowGroupModer || onRandomizeSeeds || onToggleRepositionMode || onToggleConnectionMode) && (
+          {(onShowGroupModer || onRandomizeSeeds || onToggleRepositionMode || onToggleConnectionMode || (missingNodesCount ?? 0) > 0) && (
             <>
+              {missingNodesCount > 0 && onShowMissingNodeInstaller && (
+                <button
+                  onClick={onShowMissingNodeInstaller}
+                  className="w-full px-4 py-3 flex items-center space-x-3 hover:bg-red-500/10 dark:hover:bg-red-900/20 transition-colors"
+                >
+                  <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0" />
+                  <span className="text-sm font-medium text-red-700 dark:text-red-300 text-left flex-1">
+                    Install Missing Nodes
+                  </span>
+                  {installablePackageCount > 0 && (
+                    <Badge variant="destructive" className="ml-auto text-xs">{installablePackageCount}</Badge>
+                  )}
+                </button>
+              )}
               {/* Group Title */}
               <div className="px-4 py-2 bg-white/10 dark:bg-slate-700/10 backdrop-blur-sm border-b border-white/10 dark:border-slate-600/10 rounded-t-xl">
                 <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">

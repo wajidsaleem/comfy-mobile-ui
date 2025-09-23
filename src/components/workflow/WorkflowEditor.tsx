@@ -13,6 +13,7 @@ import type { NodeWidgetModifications } from '@/shared/types/widgets/widgetModif
 // Core Services
 import { WorkflowGraphService, serializeGraph, loadWorkflowToGraph, addNodeToWorkflow, removeNodeWithLinks, removeGroup, createInputSlots, createOutputSlots } from '@/core/services/WorkflowGraphService';
 import { ConnectionService } from '@/services/ConnectionService';
+import { detectMissingWorkflowNodes, MissingWorkflowNode, resolveMissingNodePackages } from '@/services/MissingNodesService';
 import { ComfyGraph } from '@/core/domain/ComfyGraph';
 
 // Infrastructure Services
@@ -42,6 +43,7 @@ import { FilePreviewModal } from '@/components/modals/FilePreviewModal';
 import { GroupModeModal } from '@/components/ui/GroupModeModal';
 import { JsonViewerModal } from '@/components/modals/JsonViewerModal';
 import { NodeAddModal } from '@/components/modals/NodeAddModal';
+import MissingNodeInstallerModal from '@/components/modals/MissingNodeInstallerModal';
 
 // Hooks
 import { useCanvasInteraction } from '@/hooks/useCanvasInteraction';
@@ -105,6 +107,9 @@ const WorkflowEditor: React.FC = () => {
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [objectInfo, setObjectInfo] = useState<any>(null);
   const [missingNodeIds, setMissingNodeIds] = useState<Set<number>>(new Set());
+  const [missingWorkflowNodes, setMissingWorkflowNodes] = useState<MissingWorkflowNode[]>([]);
+  const [isMissingNodeModalOpen, setIsMissingNodeModalOpen] = useState(false);
+  const [installablePackageCount, setInstallablePackageCount] = useState<number>(0);
   
   // UI state
   const [isNodePanelVisible, setIsNodePanelVisible] = useState<boolean>(false);
@@ -332,7 +337,7 @@ const WorkflowEditor: React.FC = () => {
         throw new Error('Failed to load workflow into ComfyGraph');
       }
       
-      // 🔧 GraphChangeLogger: Wrap all nodes for comprehensive value change tracking
+      // ?뵩 GraphChangeLogger: Wrap all nodes for comprehensive value change tracking
       wrapGraphNodesForLogging(graph);
       
       // Store ComfyGraph instance for serialize() method usage
@@ -341,29 +346,35 @@ const WorkflowEditor: React.FC = () => {
       // Use nodes directly from ComfyGraphProcessor - no conversion
       const nodes = graph._nodes || [];
 
-      // ✅ Check for missing node types and show notification (excluding virtual nodes)
-      const missingNodes = new Set<number>();
-      const missingNodeTypes = new Set<string>();
-      
-      for (const node of nodes) {
-        const nodeType = node.type;
-        if (nodeType && !fetchedObjectInfo[nodeType] && !VIRTUAL_NODES.includes(nodeType)) {
-          missingNodes.add(node.id);
-          missingNodeTypes.add(nodeType);
-        }
-      }
-      
-      setMissingNodeIds(missingNodes);
-      
-      // Show toast notification if there are missing nodes
-      if (missingNodeTypes.size > 0) {
-        const nodeTypeList = Array.from(missingNodeTypes).join(', ');
+      // ??Check for missing node types and show notification (excluding virtual nodes)
+      const detectedMissingNodes = detectMissingWorkflowNodes(workflowData as IComfyJson, fetchedObjectInfo);
+      setMissingWorkflowNodes(detectedMissingNodes);
+
+      const missingNodeIdsSet = new Set<number>(detectedMissingNodes.map((node) => node.id));
+      setMissingNodeIds(missingNodeIdsSet);
+
+      if (detectedMissingNodes.length > 0) {
+        const nodeTypeList = Array.from(new Set(detectedMissingNodes.map((node) => node.type))).join(', ');
         toast.error(`Missing node types detected`, {
           description: `The following node types are not available on the server: ${nodeTypeList}`,
           duration: 8000,
         });
+      } else {
+        setIsMissingNodeModalOpen(false);
       }
 
+      if (detectedMissingNodes.length > 0) {
+        try {
+          const resolvedPackages = await resolveMissingNodePackages(detectedMissingNodes);
+          const installableCount = resolvedPackages.filter((pkg) => pkg.isInstallable).length;
+          setInstallablePackageCount(installableCount);
+        } catch (packageLookupError) {
+          console.error('Failed to resolve missing node packages for install badge:', packageLookupError);
+          setInstallablePackageCount(0);
+        }
+      } else {
+        setInstallablePackageCount(0);
+      }
       // Mock uses groups, real LiteGraph might use _groups
       const groups = (graph as any).groups || graph._groups || [];
       
@@ -598,12 +609,12 @@ const WorkflowEditor: React.FC = () => {
               // Handle special _node_mode parameter
               if (paramName === '_node_mode') {
                 const modeName = newValue === 0 ? 'ALWAYS' : newValue === 2 ? 'MUTE' : newValue === 4 ? 'BYPASS' : `UNKNOWN(${newValue})`;
-                console.log(`🎯 Setting node ${nodeId} mode to ${newValue} (${modeName})`);
+                console.log(`?렞 Setting node ${nodeId} mode to ${newValue} (${modeName})`);
                 graphNode.mode = newValue;
                 return; // Skip widget processing for node mode
               }
               
-              console.log(`🔍 Node ${nodeId} current structure:`, {
+              console.log(`?뵇 Node ${nodeId} current structure:`, {
                 hasWidgets: !!graphNode.widgets,
                 widgetNames: graphNode.widgets?.map((w: any) => w.name),
                 has_widgets: !!graphNode._widgets,
@@ -1205,7 +1216,7 @@ const WorkflowEditor: React.FC = () => {
         } else {
           comfyNode.bgcolor = bgcolor;
         }
-        console.log(`🎨 Updated ComfyGraph node ${nodeId} bgcolor immediately:`, {
+        console.log(`?렓 Updated ComfyGraph node ${nodeId} bgcolor immediately:`, {
           nodeId,
           newBgcolor: bgcolor === '' ? 'cleared' : bgcolor
         });
@@ -2202,7 +2213,7 @@ const WorkflowEditor: React.FC = () => {
                         updatedWorkflowJson.nodes[nodeIndex].size = change.newSize;
                         // Also update position if it changed during resize
                         updatedWorkflowJson.nodes[nodeIndex].pos = change.newPosition;
-                        console.log(`📏 Updated node ${change.nodeId} size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
+                        console.log(`?뱩 Updated node ${change.nodeId} size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
                       } else {
                         console.warn(`Node ${change.nodeId} not found in workflow_json.nodes array for resize`);
                       }
@@ -2219,7 +2230,7 @@ const WorkflowEditor: React.FC = () => {
                           change.newSize[0],     // width
                           change.newSize[1]      // height
                         ];
-                        console.log(`📏 Updated group ${change.groupId} size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
+                        console.log(`?뱩 Updated group ${change.groupId} size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
                       } else {
                         console.warn(`Group ${change.groupId} not found in workflow_json.groups array for resize`);
                       }
@@ -2233,7 +2244,7 @@ const WorkflowEditor: React.FC = () => {
                           change.newSize[0],     // width
                           change.newSize[1]      // height
                         ];
-                        console.log(`📏 Updated group ${change.groupId} (object format) size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
+                        console.log(`?뱩 Updated group ${change.groupId} (object format) size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
                       } else {
                         console.warn(`Group ${change.groupId} not found in workflow_json.groups object for resize`);
                       }
@@ -2269,7 +2280,7 @@ const WorkflowEditor: React.FC = () => {
               setWorkflow(updatedWorkflow);              
               
               const totalChanges = (changes.nodeChanges?.length || 0) + (changes.groupChanges?.length || 0) + (changes.resizeChanges?.length || 0);
-              console.log(`📍 Repositioning applied successfully: ${changes.nodeChanges?.length || 0} nodes, ${changes.groupChanges?.length || 0} groups, and ${changes.resizeChanges?.length || 0} resize changes updated (${totalChanges} total)`);
+              console.log(`?뱧 Repositioning applied successfully: ${changes.nodeChanges?.length || 0} nodes, ${changes.groupChanges?.length || 0} groups, and ${changes.resizeChanges?.length || 0} resize changes updated (${totalChanges} total)`);
 
               await loadWorkflow();
               
@@ -2333,6 +2344,9 @@ const WorkflowEditor: React.FC = () => {
             isActive: connectionMode.connectionMode.isActive
           }}
           onToggleConnectionMode={connectionMode.toggleConnectionMode}
+          installablePackageCount={installablePackageCount}
+          missingNodesCount={missingWorkflowNodes.length}
+          onShowMissingNodeInstaller={() => setIsMissingNodeModalOpen(true)}
         />
       )}
 
@@ -2393,6 +2407,16 @@ const WorkflowEditor: React.FC = () => {
       )}
 
       {/* Workflow Snapshots */}
+      <MissingNodeInstallerModal
+        isOpen={isMissingNodeModalOpen}
+        onClose={() => setIsMissingNodeModalOpen(false)}
+        missingNodes={missingWorkflowNodes}
+        onInstallationComplete={(queuedCount) => {
+          if (queuedCount > 0) {
+            setInstallablePackageCount((prev) => Math.max(prev - queuedCount, 0));
+          }
+        }}
+      />
       <WorkflowSnapshots
         isOpen={isWorkflowSnapshotsOpen}
         onClose={() => setIsWorkflowSnapshotsOpen(false)}
@@ -2456,3 +2480,5 @@ const WorkflowEditor: React.FC = () => {
 };
 
 export default WorkflowEditor;
+
+

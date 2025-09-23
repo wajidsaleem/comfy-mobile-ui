@@ -1,4 +1,4 @@
-import axios from 'axios';
+﻿import axios from 'axios';
 import { useConnectionStore } from '@/ui/store/connectionStore';
 import { globalWebSocketService } from '../websocket/GlobalWebSocketService';
 import { PromptTracker } from '@/utils/promptTracker';
@@ -7,6 +7,32 @@ import type {
   ExecutionOptions,
   ServerInfo,
 } from '@/shared/types/comfy/IComfyAPI';
+
+export interface CustomNodePackInfo {
+  id: string;
+  author?: string;
+  title?: string;
+  description?: string;
+  repository?: string;
+  channel?: string;
+  ['update-state']?: boolean | string;
+  install_type?: string;
+  files?: string[];
+  version?: string;
+  active_version?: string;
+  cnr_latest?: string;
+  mode?: string;
+  state?: string;
+  [key: string]: unknown;
+}
+
+export interface CustomNodeListResponse {
+  channel?: string;
+  node_packs: Record<string, CustomNodePackInfo>;
+  [key: string]: unknown;
+}
+
+export type CustomNodeMappingsResponse = Record<string, [string[], Record<string, unknown>]>;
 
 /**
  * ComfyUI API Client - Pure HTTP API Service
@@ -65,7 +91,7 @@ const subscribeToConnectionStore = (): void => {
 const updateServerUrl = (newUrl: string): void => {
   const oldUrl = serverUrl;
   serverUrl = newUrl.replace(/\/$/, ''); // Remove trailing slash
-  console.log(`🔄 [ComfyApiClient] Server URL updated: ${oldUrl} → ${serverUrl}`);
+  console.log(`[ComfyApiClient] Server URL updated: ${oldUrl} ??${serverUrl}`);
 };
 
 /**
@@ -114,7 +140,7 @@ const clearVRAM = async (): Promise<boolean> => {
     }, { timeout: 10000 });
     return true;
   } catch (error) {
-    console.error('❌ Failed to clear VRAM:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('Failed to clear VRAM:', error instanceof Error ? error.message : 'Unknown error');
     return false;
   }
 };
@@ -123,6 +149,110 @@ const clearVRAM = async (): Promise<boolean> => {
  * Execute workflow via HTTP API only
  * WebSocket events are handled by GlobalWebSocketService
  */
+
+/**
+ * Fetch installed custom-node packages from ComfyUI Manager
+ */
+const getInstalledCustomNodePackages = async (): Promise<Record<string, {
+  ver: string;
+  cnr_id: string | null;
+  aux_id: string | null;
+  enabled: boolean;
+}>> => {
+  initializeService();
+  try {
+    const response = await axios.get(`${serverUrl}/api/customnode/installed`, { timeout: 10000 });
+    return response.data ?? {};
+  } catch (error) {
+    console.error('Failed to retrieve installed custom nodes:', error instanceof Error ? error.message : error);
+    throw error;
+  }
+};
+
+const getCustomNodeList = async (options: { mode?: string; skipUpdate?: boolean } = {}): Promise<CustomNodeListResponse> => {
+  initializeService();
+  const { mode = 'cache', skipUpdate = true } = options;
+
+  try {
+    const response = await axios.get(`${serverUrl}/api/customnode/getlist`, {
+      params: {
+        ...(mode ? { mode } : {}),
+        ...(skipUpdate !== undefined ? { skip_update: skipUpdate } : {}),
+      },
+      timeout: 15000,
+    });
+    const data = response.data ?? {};
+    return {
+      channel: data.channel,
+      node_packs: data.node_packs ?? {},
+      ...data,
+    };
+  } catch (error) {
+    console.warn('Failed to fetch custom node list:', error instanceof Error ? error.message : error);
+    return { channel: undefined, node_packs: {} };
+  }
+};
+
+const getManagerNodeMappings = async (options: { mode?: string } = {}): Promise<CustomNodeMappingsResponse> => {
+  initializeService();
+  const { mode = 'cache' } = options;
+
+  try {
+    const response = await axios.get(`${serverUrl}/api/customnode/getmappings`, {
+      params: {
+        ...(mode ? { mode } : {}),
+      },
+      timeout: 15000,
+    });
+    return (response.data ?? {}) as CustomNodeMappingsResponse;
+  } catch (error) {
+    console.warn('Failed to fetch custom node mappings:', error instanceof Error ? error.message : error);
+    return {} as CustomNodeMappingsResponse;
+  }
+};
+
+/**
+ * Start the ComfyUI Manager installation queue
+ */
+const startManagerQueue = async (): Promise<boolean> => {
+  initializeService();
+  try {
+    const response = await axios.get(`${serverUrl}/comfymobile/api/manager/queue/start`, {
+      timeout: 10000,
+      validateStatus: () => true,
+    });
+    return response.status === 200 || response.status === 201;
+  } catch (error) {
+    console.error('Failed to start manager queue:', error instanceof Error ? error.message : error);
+    return false;
+  }
+};
+
+/**
+ * Queue a package installation/update request via ComfyUI Manager
+ */
+const queuePackageInstall = async (payload: {
+  id: string;
+  selected_version: string;
+  version?: string;
+  repository?: string;
+  channel?: string;
+  mode?: string;
+  skip_post_install?: boolean;
+  pip?: string[];
+}): Promise<boolean> => {
+  initializeService();
+  try {
+    const body = Object.fromEntries(
+      Object.entries(payload).filter(([, value]) => value !== undefined && value !== null),
+    );
+    await axios.post(`${serverUrl}/comfymobile/api/manager/queue/install`, body, { timeout: 15000 });
+    return true;
+  } catch (error) {
+    console.error('Failed to queue package install:', error instanceof Error ? error.message : error);
+    return false;
+  }
+};
 const executeWorkflow = async (
   apiWorkflow: any, 
   options: ExecutionOptions & { workflowId?: string; workflowName?: string } = {}
@@ -138,7 +268,7 @@ const executeWorkflow = async (
     await clearCache();
   }
 
-  console.log('📥 [ComfyApiClient] Executing workflow via HTTP API:', {
+  console.log('[ComfyApiClient] Executing workflow via HTTP API:', {
     nodeCount: Object.keys(apiWorkflow).length,
     workflowId,
     workflowName
@@ -148,7 +278,7 @@ const executeWorkflow = async (
   const promptId = generatePromptId();
   const serverPromptId = await submitPrompt(apiWorkflow, promptId, workflowId, workflowName);
 
-  console.log('✅ [ComfyApiClient] Workflow submitted successfully:', {
+  console.log('[ComfyApiClient] Workflow submitted successfully:', {
     promptId: serverPromptId.substring(0, 8) + '...',
     workflowId,
     workflowName
@@ -190,7 +320,7 @@ const submitPrompt = async (
     const serverPromptId = response.data.prompt_id;
     
     if (serverPromptId && workflowId) {
-      console.log('🎯 [ComfyApiClient] Adding prompt to tracking system');
+      console.log('[ComfyApiClient] Adding prompt to tracking system');
       PromptTracker.addRunningPrompt(serverPromptId, workflowId, workflowName || undefined);
     }
     
@@ -200,13 +330,13 @@ const submitPrompt = async (
     return serverPromptId;
 
   } catch (error) {
-    console.error(`❌ Failed to submit prompt ${promptId.substring(0, 8)}:`, error);
+    console.error(`Failed to submit prompt ${promptId.substring(0, 8)}:`, error);
     
     // For API response errors, emit execution_error event with raw response
     if (axios.isAxiosError(error) && error.response) {
       const rawServerResponse = error.response.data;
       
-      console.log('🔴 API Response Error - Emitting execution_error with raw response:', {
+      console.log('API Response Error - Emitting execution_error with raw response:', {
         status: error.response.status,
         statusText: error.response.statusText,
         data: rawServerResponse
@@ -302,7 +432,7 @@ const submitPromptWithId = async (apiWorkflow: any, promptId: string): Promise<v
 
     // Track this prompt in localStorage for reconnection after browser restart
     const serverPromptId = response.data.prompt_id;
-    console.log(`🎯 [ComfyApiClient] Server returned prompt_id:`, serverPromptId);
+    console.log(`[ComfyApiClient] Server returned prompt_id:`, serverPromptId);
     
     // Use current processing state from GlobalWebSocketService for tracking
     const processingInfo = globalWebSocketService.getProcessingInfo();
@@ -310,22 +440,22 @@ const submitPromptWithId = async (apiWorkflow: any, promptId: string): Promise<v
     const currentWorkflowName = processingInfo.workflowName;
     
     if (serverPromptId && currentWorkflowId) {
-      console.log(`🎯 [ComfyApiClient] Adding prompt to tracking system`);
+      console.log(`[ComfyApiClient] Adding prompt to tracking system`);
       try {
         PromptTracker.addRunningPrompt(serverPromptId, currentWorkflowId, currentWorkflowName || undefined);
       } catch (error) {
-        console.error(`🎯 [ComfyApiClient] Failed to add to tracking system:`, error);
+        console.error(`[ComfyApiClient] Failed to add to tracking system:`, error);
       }
     }
     
   } catch (error) {
-    console.error(`❌ Failed to submit prompt ${promptId.substring(0, 8)}:`, error);
+    console.error(`Failed to submit prompt ${promptId.substring(0, 8)}:`, error);
     
     // For API response errors, emit execution_error event with raw response
     if (axios.isAxiosError(error) && error.response) {
       const rawServerResponse = error.response.data;
       
-      console.log('🔴 API Response Error - Emitting execution_error with raw response:', {
+      console.log('API Response Error - Emitting execution_error with raw response:', {
         status: error.response.status,
         statusText: error.response.statusText,
         data: rawServerResponse
@@ -1294,7 +1424,7 @@ const rebootServer = async (): Promise<boolean> => {
 
   if (serverIsResponsive) {
     // when server is responsive: use Extension API
-    console.log('🔄 Server responsive - using Extension API');
+    console.log('Server responsive - using Extension API');
     try {
       const response = await axios.post(`${serverUrl}/comfymobile/api/reboot`, {
         confirm: true
@@ -1306,7 +1436,7 @@ const rebootServer = async (): Promise<boolean> => {
       });
       
       if (response.status === 200) {
-        console.log('✅ Restart requested via extension API');
+        console.log('Restart requested via extension API');
         return true;
       }
     } catch (error) {
@@ -1315,7 +1445,7 @@ const rebootServer = async (): Promise<boolean> => {
     }
   } else {
     // when server is unresponsive: use Watchdog API
-    console.log('🔄 Server unresponsive - using Watchdog API');
+    console.log('Server unresponsive - using Watchdog API');
     try {
       const serverUrlObj = new URL(serverUrl);
       const watchdogUrl = `${serverUrlObj.protocol}//${serverUrlObj.hostname}:9188/restart`;
@@ -1331,7 +1461,7 @@ const rebootServer = async (): Promise<boolean> => {
       if (watchdogResponse.ok) {
         const data = await watchdogResponse.json();
         if (data.success) {
-          console.log('✅ Restart requested via watchdog API');
+          console.log('Restart requested via watchdog API');
           return true;
         }
       }
@@ -1369,6 +1499,13 @@ const ComfyUIService = {
   interruptExecution,
   clearQueue,
   
+  // Custom node manager
+  getInstalledCustomNodePackages,
+  getCustomNodeList,
+  getManagerNodeMappings,
+  startManagerQueue,
+  queuePackageInstall,
+  
   // Server management
   getServerInfo,
   clearCache,
@@ -1391,7 +1528,7 @@ const ComfyUIService = {
   
   // Legacy methods (compatibility)
   cleanupExecution: (promptId: string) => {
-    console.log('🧹 [ComfyApiClient] cleanupExecution delegated to GlobalWebSocketService');
+    console.log('[ComfyApiClient] cleanupExecution delegated to GlobalWebSocketService');
     // In the new architecture, cleanup is handled by GlobalWebSocketService
     // We can still notify it about cleanup if needed
     globalWebSocketService.emit('cleanup_execution', { promptId });
@@ -1399,7 +1536,7 @@ const ComfyUIService = {
   
   // Reconnection (handled by GlobalWebSocketService)
   reconnectToPrompt: (promptId: string, workflowId: string, workflowName?: string) => {
-    console.log('🔌 [ComfyApiClient] Reconnection delegated to GlobalWebSocketService');
+    console.log('[ComfyApiClient] Reconnection delegated to GlobalWebSocketService');
     // This functionality is now handled by GlobalWebSocketService + WorkflowEditor
     // No longer needed as a direct API call
   },

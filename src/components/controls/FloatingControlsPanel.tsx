@@ -30,6 +30,9 @@ interface FloatingControlsPanelProps {
   // Node search enhancement
   nodes?: SearchableNode[];
   nodeBounds?: Map<number, any>;
+  missingNodesCount?: number;
+  installablePackageCount?: number;
+  onShowMissingNodeInstaller?: () => void;
   // Repositioning mode controls (for passing to SettingsDropdown)
   repositionMode?: {
     isActive: boolean;
@@ -56,6 +59,9 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
   onRefreshWorkflow,
   nodes = [],
   nodeBounds,
+  missingNodesCount = 0,
+  installablePackageCount = 0,
+  onShowMissingNodeInstaller,
   repositionMode,
   onToggleRepositionMode,
   connectionMode,
@@ -509,14 +515,18 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
               variant="ghost"
               size="sm"
-              className={`h-8 w-8 p-0 transition-transform duration-200 hover:bg-white/60 dark:hover:bg-slate-700/60 ${
-                isSettingsOpen ? 'rotate-90' : ''
-              }`}
+              className="relative h-8 w-8 p-0 hover:bg-white/60 dark:hover:bg-slate-700/60"
               title="Settings"
             >
-              <Settings className="h-4 w-4" />
+              <Settings
+                className={`h-4 w-4 transition-transform duration-200 ${
+                  isSettingsOpen ? 'rotate-90' : ''
+                }`}
+              />
+              {missingNodesCount > 0 && (
+                <span className="pointer-events-none absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_1.5px_rgba(15,23,42,0.8)] animate-pulse" />
+              )}
             </Button>
-            
           </div>
         </div>
       </div>
@@ -539,6 +549,9 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
         onToggleRepositionMode={onToggleRepositionMode}
         connectionMode={connectionMode}
         onToggleConnectionMode={onToggleConnectionMode}
+        missingNodesCount={missingNodesCount}
+        installablePackageCount={installablePackageCount}
+        onShowMissingNodeInstaller={onShowMissingNodeInstaller}
       />
 
       {/* Search Panel - Independent container below main controls */}
@@ -653,3 +666,4 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
     </div>
   );
 };
+

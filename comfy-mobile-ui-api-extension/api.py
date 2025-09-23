@@ -27,6 +27,7 @@ try:
     from .handlers.system_handler import *
     from .handlers.widget_handler import *
     from .handlers.node_mapping_handler import *
+    from .handlers.manager_handler import *
 except ImportError as e:
     print(f"Warning: Could not import handlers: {e}")
     # Fallback imports (for development/testing)
@@ -40,6 +41,7 @@ except ImportError as e:
     from handlers.system_handler import *
     from handlers.widget_handler import *
     from handlers.node_mapping_handler import *
+    from handlers.manager_handler import *
 
 def get_routes():
     """Get routes from ComfyUI server module"""
@@ -145,6 +147,10 @@ def setup_routes():
                 app.router.add_get('/comfymobile/api/custom/node-mappings/{nodeType}', get_node_mapping)
                 app.router.add_delete('/comfymobile/api/custom/node-mappings/{nodeType}', delete_node_mapping)
                 app.router.add_post('/comfymobile/api/custom/node-mappings/delete', delete_node_mapping)  # Scope-based deletion
+
+                # Manager proxy routes
+                app.router.add_get('/comfymobile/api/manager/queue/start', manager_queue_start)
+                app.router.add_post('/comfymobile/api/manager/queue/install', manager_queue_install)
                 
                 print("✅ ComfyMobileUI API routes registered successfully")
                 print("📋 Modular handlers loaded:")
@@ -188,6 +194,10 @@ def setup_routes():
             routes.post('/comfymobile/api/custom/node-mappings')(save_node_mapping)
             routes.get('/comfymobile/api/custom/node-mappings/{nodeType}')(get_node_mapping)
             routes.delete('/comfymobile/api/custom/node-mappings/{nodeType}')(delete_node_mapping)
+
+            # Manager proxy routes
+            routes.get('/comfymobile/api/manager/queue/start')(manager_queue_start)
+            routes.post('/comfymobile/api/manager/queue/install')(manager_queue_install)
             
             print("✅ ComfyMobileUI API routes registered via direct routes (legacy mode)")
             return True
