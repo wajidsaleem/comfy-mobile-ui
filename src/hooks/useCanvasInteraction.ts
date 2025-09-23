@@ -418,7 +418,11 @@ export const useCanvasInteraction = ({
   // Handle cursor feedback when hovering over grippers
   const handleMouseHover = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas || !repositionMode.isActive) {
+    if (!canvas) {
+      return;
+    }
+
+    if (!repositionMode.isActive) {
       // Reset cursor if not in repositioning mode
       canvas.style.cursor = '';
       return;

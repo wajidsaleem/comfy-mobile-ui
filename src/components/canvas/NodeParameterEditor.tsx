@@ -9,6 +9,7 @@ import { ComfyGraphNode } from '@/core/domain/ComfyGraphNode';
 import { WidgetValueEditor } from '@/components/controls/WidgetValueEditor';
 import { VideoPreviewSection } from '@/components/media/VideoPreviewSection';
 import { InlineImagePreview } from '@/components/media/InlineImagePreview';
+import { PointEditor } from '@/components/controls/widgets/custom_node_widget/PointEditor';
 
 interface NodeBounds {
   x: number;
@@ -409,14 +410,36 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
   const renderParameterSection = (title: string, params: IProcessedParameter[], icon: string, isWidgetValues: boolean = false) => {
     if (!params || params.length === 0) return null;
 
+    // Check if this is a PointsEditor node
+    const isPointsEditor = selectedNode.type === 'PointsEditor';
+
+    // Filter out readonly parameters for PointsEditor nodes
+    const readonlyParams = isPointsEditor ? ['points_store', 'coordinates', 'neg_coordinates'] : [];
+    const filteredParams = isPointsEditor
+      ? params.filter(param => !readonlyParams.includes(param.name))
+      : params;
+
     return (
       <div className="space-y-3">
         <h4 className="text-md font-medium text-slate-700 dark:text-slate-300 flex items-center space-x-2">
           <span>{icon}</span>
-          <span>{title} ({params.length})</span>
+          <span>{title} ({filteredParams.length})</span>
         </h4>
+
+        {/* Add PointEditor for PointsEditor nodes at the top */}
+        {isPointsEditor && isWidgetValues && setWidgetValue && (
+          <PointEditor
+            node={selectedNode}
+            onWidgetChange={(widgetName: string, value: any) => {
+              setWidgetValue(nodeId, widgetName, value);
+            }}
+            isModified={isWidgetModified('points_store')}
+            modifiedHighlightClasses={getModifiedClasses('points_store')}
+          />
+        )}
+
         <div className="space-y-3">
-          {params.map((param: IProcessedParameter, index: number) => (
+          {filteredParams.map((param: IProcessedParameter, index: number) => (
             <div key={`${param.name}-${index}`} className={isWidgetValues ? "group" : ""}>
               {isWidgetValues && selectedNode ? (
                 // Check if this widget input is connected
