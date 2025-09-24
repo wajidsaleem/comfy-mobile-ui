@@ -656,48 +656,53 @@ export const OutputsGallery: React.FC<OutputsGalleryProps> = ({
     return ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'].includes(ext);
   };
 
+  // Helper function to check if image has corresponding video
+  const hasCorrespondingVideo = useCallback((imageFile: IComfyFileInfo): boolean => {
+    if (!files.videos || files.videos.length === 0) return false;
+
+    // Get image filename without extension
+    const imgNameWithoutExt = imageFile.filename.substring(0, imageFile.filename.lastIndexOf('.'));
+
+    // Look for video with same name in the SAME subfolder and folder type
+    const videoExtensions = ['mp4', 'avi', 'mov', 'mkv', 'webm'];
+
+    for (const video of files.videos) {
+      // Must match subfolder and folder type (input/output/temp) as well as filename
+      if (video.subfolder !== imageFile.subfolder || video.type !== imageFile.type) {
+        continue;
+      }
+
+      let videoNameWithoutExt = video.filename.substring(0, video.filename.lastIndexOf('.'));
+      const videoExt = video.filename.split('.').pop()?.toLowerCase() || '';
+
+      // Remove -audio suffix if present (e.g., "something-video-audio" -> "something-video")
+      if (videoNameWithoutExt.endsWith('-audio')) {
+        videoNameWithoutExt = videoNameWithoutExt.substring(0, videoNameWithoutExt.lastIndexOf('-audio'));
+      }
+
+      if (imgNameWithoutExt === videoNameWithoutExt && videoExtensions.includes(videoExt)) {
+        return true; // Found corresponding video
+      }
+    }
+
+    return false;
+  }, [files.videos]);
+
+  // Calculate filtered image count (excluding thumbnails)
+  const filteredImageCount = useMemo(() => {
+    return files.images.filter(img => !hasCorrespondingVideo(img)).length;
+  }, [files.images, hasCorrespondingVideo]);
+
   // Apply thumbnail filtering only for images tab
   const currentFiles = useMemo(() => {
     if (activeTab === 'images') {
-      // Helper function to check if image has corresponding video (same as in loadFiles)
-      const hasCorrespondingVideo = (imageFile: IComfyFileInfo): boolean => {
-        if (!files.videos || files.videos.length === 0) return false;
-        
-        // Get image filename without extension
-        const imgNameWithoutExt = imageFile.filename.substring(0, imageFile.filename.lastIndexOf('.'));
-        
-        // Look for video with same name in the SAME subfolder and folder type
-        const videoExtensions = ['mp4', 'avi', 'mov', 'mkv', 'webm'];
-        
-        for (const video of files.videos) {
-          // Must match subfolder and folder type (input/output/temp) as well as filename
-          if (video.subfolder !== imageFile.subfolder || video.type !== imageFile.type) {
-            continue;
-          }
-          
-          let videoNameWithoutExt = video.filename.substring(0, video.filename.lastIndexOf('.'));
-          const videoExt = video.filename.split('.').pop()?.toLowerCase() || '';
-          
-          // Remove -audio suffix if present (e.g., "something-video-audio" -> "something-video")
-          if (videoNameWithoutExt.endsWith('-audio')) {
-            videoNameWithoutExt = videoNameWithoutExt.substring(0, videoNameWithoutExt.lastIndexOf('-audio'));
-          }
-          
-          if (imgNameWithoutExt === videoNameWithoutExt && videoExtensions.includes(videoExt)) {
-            return true; // Found corresponding video
-          }
-        }
-        
-        return false;
-      };
-      
       // Filter out thumbnail images that have corresponding videos
       return files.images.filter(img => !hasCorrespondingVideo(img));
     }
-    
+
     // For videos tab, return all videos (no filtering needed)
     return files[activeTab];
-  }, [files, activeTab]);
+  }, [files, activeTab, hasCorrespondingVideo]);
   const totalFiles = files.images.length + files.videos.length;
 
   return (
@@ -861,7 +866,7 @@ export const OutputsGallery: React.FC<OutputsGalleryProps> = ({
                 <ImageIcon className="h-4 w-4" />
                 <span>Images</span>
                 <Badge variant="secondary" className="ml-1">
-                  {files.images.length}
+                  {filteredImageCount}
                 </Badge>
               </button>
             )}
