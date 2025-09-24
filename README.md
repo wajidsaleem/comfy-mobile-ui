@@ -6,13 +6,13 @@
 
 ![ComfyMobileUI Icon](./public/icons/icon-192x192.png)
 
-**A mobile-first, modern web interface for ComfyUI**
-*Bringing professional AI image generation workflows to your fingertips*
+**A mobile-first, node-style web interface for ComfyUI**
+*Bringing ComfyUI's familiar node graph workflows to your mobile device*
 
 ![TypeScript-React](https://img.shields.io/badge/TypeScript-React-blue?style=for-the-badge&logo=typescript)
 ![Vite](https://img.shields.io/badge/Vite-Next_Generation_Frontend-646CFF?style=for-the-badge&logo=vite)
 ![Mobile First](https://img.shields.io/badge/Mobile-First_Design-success?style=for-the-badge&logo=mobile)
-![PWA](https://img.shields.io/badge/PWA-Progressive_Web_App-purple?style=for-the-badge&logo=pwa)
+![ComfyUI](https://img.shields.io/badge/ComfyUI-Compatible-red?style=for-the-badge&logo=image)
 
 [⭐ **Star this project if you find it useful!** ⭐](#show-your-support)
 
@@ -24,38 +24,86 @@
 
 I found myself spending long hours sitting at a computer desk to use ComfyUI, which became uncomfortable over time. Most of the work involved simply **experimenting** with workflows (tweaking parameters, testing different configurations, and iterating through ideas).
 
-I wanted to enjoy these amazing features comfortably from my couch without being tied to a desk. Initially, I tried accessing ComfyUI through a mobile browser, but while ComfyUI excels at complex workflow creation, the mobile experience was quite inconvenient. So I created a mobile-first interface optimized for **workflow usage and experimentation**.
+I wanted to enjoy these amazing features comfortably from my couch without being tied to a desk. Initially, I tried accessing ComfyUI through a mobile browser, but while ComfyUI excels at complex workflow creation, the mobile experience was quite inconvenient.
+
+Most existing mobile ComfyUI frontends focus on WebUI-style workflow execution, which meant losing ComfyUI's flexible node graph advantages and having to learn different usage patterns. This made them difficult to use for someone already familiar with ComfyUI's node-based approach.
+
+So I created a mobile-first **node-style interface** that maintains ComfyUI's familiar node graph workflow while being optimized for **mobile workflow editing and experimentation**.
 
 **ComfyMobileUI** was born from this need and focuses on:
-- **Use workflows comfortably** from anywhere
-- **Focus on experimentation** rather than complex creation
-- **Leverage mobile convenience** for quick parameter adjustments
-- **Streamline the workflow usage** process
-
-**For complex workflow creation, we still recommend using the ComfyUI desktop interface, then importing and using those workflows in ComfyMobileUI.**
+- **Edit and use workflows comfortably** from anywhere with your mobile device
+- **Break free from mouse and keyboard** - quickly modify and execute workflows on mobile
+- **Comprehensive workflow editing support** - most ComfyUI workflow editing features are supported
+- **Quick output review** - open the gallery in the app to quickly review your generated content
 
 ## Philosophy
 
-**ComfyMobileUI** is designed for **workflow usage**, not complex creation. While ComfyUI desktop remains the best tool for building intricate workflows, this app excels at:
+**ComfyMobileUI** is a **node-style mobile interface** that maintains ComfyUI's familiar node graph approach while providing **comprehensive workflow editing and usage** on mobile devices. With advanced node editing capabilities, you can:
 
-- **Using existing workflows** with mobile-friendly controls
-- **Making parameter adjustments** and fine-tuning
-- **Quick experimentation** and iteration
-- **Comfortable mobile experience** for AI generation
+- **Edit and modify workflows** with mobile-friendly controls
+- **Adjust node parameters** and fine-tune workflows
+- **Connect and disconnect node links** with intuitive touch gestures
+- **Resize nodes and manage layouts** directly on mobile
+- **Install missing nodes** seamlessly through the app
+- **Execute workflows** with real-time progress tracking
+- **Review outputs quickly** in the built-in gallery
 
-For complex workflow creation, we recommend using the full ComfyUI desktop interface, then importing and using those workflows in ComfyMobileUI.
+Break free from mouse and keyboard - quickly modify and execute ComfyUI's node-based workflows on your mobile device. Most ComfyUI workflow editing features are now supported with the same familiar node graph interface!
+
+---
+
+## Showcase
+
+### **Real-time Workflow Execution**
+<div align="center">
+  <img src="./public/showcases/2.gif" alt="Real-time workflow execution with progress bar" width="300"/>
+</div>
+
+*Watch your workflows execute in real-time with progress indicators*
+
+### **Node Editing & Widget Configuration**
+<div align="center">
+  <img src="./public/showcases/1.gif" alt="Node resizing and widget editing demo" width="300"/>
+</div>
+
+*Resize nodes and edit widget values with intuitive touch controls*
+
+### **Node Connection Management**
+<div align="center">
+  <img src="./public/showcases/3.gif" alt="Creating node connections in Connection mode" width="300"/>
+</div>
+
+*Create new node connections using Connection mode*
+
+### **Remote Server Management**
+<div align="center">
+  <img src="./public/showcases/4.gif" alt="ComfyUI server reboot from mobile" width="300"/>
+</div>
+
+*Remotely reboot ComfyUI server when needed*
+
+### **Output Gallery**
+<div align="center">
+  <img src="./public/showcases/5.gif" alt="Viewing outputs in gallery" width="300"/>
+</div>
+
+*Browse and review generated images and videos in the built-in gallery*
+
+*And many more amazing features are available below!*
 
 ---
 
 ## Features
 
 ### **Core Workflow Features**
-- **Workflow Upload**: Import standard ComfyUI workflow files (non-API format)
-- **Snapshot System**: Save and restore specific workflow states with full history
 - **Workflow Execution**: One-tap execution with real-time progress tracking
 - **Queue Management**: View, interrupt, and manage execution queue
-- **Simple Node Editing**: Basic node positioning and connection modifications
+- **Advanced Node Editing**: Full node positioning, resizing, and connection management
+- **Link Management**: Connect and disconnect node links with touch gestures
 - **Widget Value Editing**: Modify node parameters with mobile-optimized controls
+- **Missing Node Installation**: Install missing custom nodes directly through the app
+- **Workflow Upload**: Import standard ComfyUI workflow files (non-API format)
+- **Snapshot System**: Save and restore specific workflow states with full history
 
 ### **Convenience Features**
 - **Watchdog Reboot**: Restart ComfyUI server processes (even when server is completely unresponsive!)
@@ -72,7 +120,7 @@ For complex workflow creation, we recommend using the full ComfyUI desktop inter
 - **Trigger Word Search**: Pre-save trigger words and easily copy them in workflows
 
 ### **Mobile-Optimized Interface**
-- **Progressive Web App**: Install on mobile devices for native-like experience
+- **Responsive Web Application**: Mobile-optimized web app with native-like experience
 - **Touch Gestures**: Long press, pinch to zoom, drag to pan
 - **Responsive Design**: Seamless experience across all device sizes
 - **Optimized Performance**: Efficient rendering for mobile hardware
@@ -92,7 +140,7 @@ ComfyUI's diverse custom nodes often include special rules written as JS scripts
 
 ### **Use Cases**
 - **Add missing widgets** that don't appear in object_info
-- **Override widget types** (possibly convert Int widget to Combo for predefined values)
+- **Override widget types**
 - **Fix compatibility issues** with some custom nodes
 - **Customize node behavior** for mobile usage
 
