@@ -97,6 +97,7 @@ const WorkflowEditor: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<IComfyGraphNode | null>(null);
   const [nodeBounds, setNodeBounds] = useState<Map<number, NodeBounds>>(new Map());
   const [groupBounds, setGroupBounds] = useState<GroupBounds[]>([]);
+  const [canvasUpdateTrigger, setCanvasUpdateTrigger] = useState(0); // Trigger for canvas-only updates
   
   // Auto-fit tracking
   const [hasAutoFitted, setHasAutoFitted] = useState(false);
@@ -1421,40 +1422,74 @@ const WorkflowEditor: React.FC = () => {
         }
       });
 
-      // 2. Update workflow_json for persistence
-      const updatedWorkflowJson = JSON.parse(JSON.stringify(workflow.workflow_json));
-
+      // 2. Update workflow_json DIRECTLY (in-place) for persistence
       // Remove link from workflow_json links array
-      updatedWorkflowJson.links = updatedWorkflowJson.links.filter((link: any) => link[0] !== linkId);
+      workflow.workflow_json.links = workflow.workflow_json.links.filter((link: any) => link[0] !== linkId);
 
       // Clear the input link in workflow_json
-      const targetJsonNode = updatedWorkflowJson.nodes.find((n: any) => n.id === nodeId);
+      const targetJsonNode = workflow.workflow_json.nodes.find((n: any) => n.id === nodeId);
       if (targetJsonNode && targetJsonNode.inputs && targetJsonNode.inputs[inputSlot]) {
         targetJsonNode.inputs[inputSlot].link = null;
       }
 
       // Remove link from source node outputs in workflow_json
-      updatedWorkflowJson.nodes.forEach((node: any) => {
+      workflow.workflow_json.nodes.forEach((node: any) => {
         if (node.outputs) {
           node.outputs.forEach((output: any) => {
             if (output.links && Array.isArray(output.links)) {
-              output.links = output.links.filter((id: number) => id !== linkId);
+              const linkIndex = output.links.indexOf(linkId);
+              if (linkIndex !== -1) {
+                output.links.splice(linkIndex, 1);
+              }
             }
           });
         }
       });
 
-      // 3. Save updated workflow
-      const updatedWorkflow = {
-        ...workflow,
-        workflow_json: updatedWorkflowJson
-      };
+      // 3. Update workflow.graph directly (in-place, no copy) to avoid React re-render
+      if (workflow.graph && workflow.graph._links) {
+        // Remove link from graph _links object directly
+        if (workflow.graph._links[linkId]) {
+          delete workflow.graph._links[linkId];
+        }
 
-      await updateWorkflow(updatedWorkflow);
-      setWorkflow(updatedWorkflow);
+        // Clear the input link in graph _nodes directly
+        if (workflow.graph._nodes) {
+          const targetGraphNode = workflow.graph._nodes.find((n: any) => n.id === nodeId);
+          if (targetGraphNode && targetGraphNode.inputs && targetGraphNode.inputs[inputSlot]) {
+            targetGraphNode.inputs[inputSlot].link = null;
+          }
 
-      // Reload the workflow using the same logic as initial app entry
-      await loadWorkflow();
+          // Remove link from source node outputs in graph directly
+          workflow.graph._nodes.forEach((node: any) => {
+            if (node.outputs) {
+              node.outputs.forEach((output: any) => {
+                if (output.links && Array.isArray(output.links)) {
+                  const linkIndex = output.links.indexOf(linkId);
+                  if (linkIndex !== -1) {
+                    output.links.splice(linkIndex, 1);
+                  }
+                }
+              });
+            }
+          });
+        }
+      }
+
+      // 4. Use the directly modified workflow for backend save
+      const updatedWorkflow = workflow; // Already modified in-place
+
+      // Save to backend asynchronously without updating React state
+      updateWorkflow(updatedWorkflow).catch(error => {
+        console.error('Failed to save workflow:', error);
+        toast.error('Failed to save workflow changes');
+      });
+
+      // Trigger canvas redraw with imperceptible viewport change
+      setViewport(prev => ({ ...prev, scale: prev.scale + 0.00001 }));
+      setTimeout(() => {
+        setViewport(prev => ({ ...prev, scale: prev.scale - 0.00001 }));
+      }, 10);
 
       toast.success('Connection disconnected successfully');
 
@@ -1505,16 +1540,14 @@ const WorkflowEditor: React.FC = () => {
         graphNode.outputs[outputSlot].links = graphNode.outputs[outputSlot].links.filter((id: number) => id !== linkId);
       }
 
-      // 2. Update workflow_json for persistence
-      const updatedWorkflowJson = JSON.parse(JSON.stringify(workflow.workflow_json));
-
+      // 2. Update workflow_json DIRECTLY (in-place) for persistence
       // Remove link from workflow_json links array
-      updatedWorkflowJson.links = updatedWorkflowJson.links.filter((link: any) => link[0] !== linkId);
+      workflow.workflow_json.links = workflow.workflow_json.links.filter((link: any) => link[0] !== linkId);
 
       // Clear the target node's input link in workflow_json
       if (linkInfo) {
         const [, , , targetNodeId, targetSlot] = linkInfo;
-        const targetJsonNode = updatedWorkflowJson.nodes.find((n: any) => n.id === targetNodeId);
+        const targetJsonNode = workflow.workflow_json.nodes.find((n: any) => n.id === targetNodeId);
 
         if (targetJsonNode && targetJsonNode.inputs && targetJsonNode.inputs[targetSlot]) {
           targetJsonNode.inputs[targetSlot].link = null;
@@ -1522,22 +1555,57 @@ const WorkflowEditor: React.FC = () => {
       }
 
       // Remove link from source node outputs in workflow_json
-      const sourceJsonNode = updatedWorkflowJson.nodes.find((n: any) => n.id === nodeId);
+      const sourceJsonNode = workflow.workflow_json.nodes.find((n: any) => n.id === nodeId);
       if (sourceJsonNode && sourceJsonNode.outputs && sourceJsonNode.outputs[outputSlot] && sourceJsonNode.outputs[outputSlot].links) {
-        sourceJsonNode.outputs[outputSlot].links = sourceJsonNode.outputs[outputSlot].links.filter((id: number) => id !== linkId);
+        const linkIndex = sourceJsonNode.outputs[outputSlot].links.indexOf(linkId);
+        if (linkIndex !== -1) {
+          sourceJsonNode.outputs[outputSlot].links.splice(linkIndex, 1);
+        }
       }
 
-      // 3. Save updated workflow
-      const updatedWorkflow = {
-        ...workflow,
-        workflow_json: updatedWorkflowJson
-      };
+      // 3. Update workflow.graph directly (in-place, no copy) to avoid React re-render
+      if (workflow.graph && workflow.graph._links) {
+        // Remove link from graph _links object directly
+        if (workflow.graph._links[linkId]) {
+          delete workflow.graph._links[linkId];
+        }
 
-      await updateWorkflow(updatedWorkflow);
-      setWorkflow(updatedWorkflow);
+        // Clear the target node's input link in graph _nodes directly
+        if (linkInfo && workflow.graph._nodes) {
+          const [, , , targetNodeId, targetSlot] = linkInfo;
+          const targetGraphNode = workflow.graph._nodes.find((n: any) => n.id === targetNodeId);
 
-      // Reload the workflow using the same logic as initial app entry
-      await loadWorkflow();
+          if (targetGraphNode && targetGraphNode.inputs && targetGraphNode.inputs[targetSlot]) {
+            targetGraphNode.inputs[targetSlot].link = null;
+          }
+        }
+
+        // Remove link from source node outputs in graph directly
+        if (workflow.graph._nodes) {
+          const sourceGraphNode = workflow.graph._nodes.find((n: any) => n.id === nodeId);
+          if (sourceGraphNode && sourceGraphNode.outputs && sourceGraphNode.outputs[outputSlot] && sourceGraphNode.outputs[outputSlot].links) {
+            const linkIndex = sourceGraphNode.outputs[outputSlot].links.indexOf(linkId);
+            if (linkIndex !== -1) {
+              sourceGraphNode.outputs[outputSlot].links.splice(linkIndex, 1);
+            }
+          }
+        }
+      }
+
+      // 4. Use the directly modified workflow for backend save
+      const updatedWorkflow = workflow; // Already modified in-place
+
+      // Save to backend asynchronously without updating React state
+      updateWorkflow(updatedWorkflow).catch(error => {
+        console.error('Failed to save workflow:', error);
+        toast.error('Failed to save workflow changes');
+      });
+
+      // Trigger canvas redraw with imperceptible viewport change
+      setViewport(prev => ({ ...prev, scale: prev.scale + 0.00001 }));
+      setTimeout(() => {
+        setViewport(prev => ({ ...prev, scale: prev.scale - 0.00001 }));
+      }, 10);
 
       toast.success('Connection disconnected successfully');
 
@@ -1695,32 +1763,41 @@ const WorkflowEditor: React.FC = () => {
   };
 
   const handleNodeTitleChange = async (nodeId: number, title: string) => {
-    if (!workflow?.graph) return;
+    // Update node title in both workflow_json and ComfyGraph
+    if (!workflow?.workflow_json || !comfyGraphRef.current) {
+      console.warn('No workflow_json or ComfyGraph available');
+      return;
+    }
 
     try {
       console.log('Updating node title:', { nodeId, title });
 
-      // Find the node in the graph
-      const node = workflow.graph._nodes?.find(n => n.id === nodeId);
-      if (!node) {
-        console.error('Node not found:', nodeId);
-        toast.error('Node not found');
-        return;
+      // 1. Update ComfyGraph node immediately (for instant visual feedback)
+      const comfyNode = comfyGraphRef.current.getNodeById(nodeId);
+      if (comfyNode) {
+        // Update the node title using ComfyGraphNode's setTitle method
+        if (typeof (comfyNode as any).setTitle === 'function') {
+          (comfyNode as any).setTitle(title);
+          console.log('Used setTitle method on ComfyGraph node');
+        } else {
+          // Fallback: set title directly
+          (comfyNode as any).title = title;
+          console.log('Set title directly on ComfyGraph node');
+        }
+        console.log(`Updated ComfyGraph node ${nodeId} title immediately:`, title);
       }
 
-      console.log('Found node:', node);
-
-      // Update the node title using ComfyGraphNode's setTitle method
-      if (typeof (node as any).setTitle === 'function') {
-        (node as any).setTitle(title);
-        console.log('Used setTitle method');
-      } else {
-        // Fallback: set title directly
-        (node as any).title = title;
-        console.log('Set title directly');
+      // Also find in workflow.graph for consistency
+      if (workflow.graph) {
+        const node = workflow.graph._nodes?.find(n => n.id === nodeId);
+        if (node) {
+          if (typeof (node as any).setTitle === 'function') {
+            (node as any).setTitle(title);
+          } else {
+            (node as any).title = title;
+          }
+        }
       }
-
-      console.log('Node after title update:', (node as any).title);
 
       // Update workflow_json for persistence - SHALLOW copy to preserve references
       const updatedWorkflowJson = {
@@ -1755,8 +1832,14 @@ const WorkflowEditor: React.FC = () => {
 
       // Update selected node to reflect changes in UI
       if (selectedNode && selectedNode.id === nodeId) {
-        // Use the updated graph node instead of spreading selectedNode
-        setSelectedNode(node as any);
+        const updatedNode = comfyGraphRef.current?.getNodeById(nodeId);
+        if (updatedNode) {
+          // Force React to detect the change by clearing and resetting
+          setSelectedNode(null);
+          setTimeout(() => {
+            setSelectedNode(updatedNode as any);
+          }, 0);
+        }
       }
 
       toast.success('Node title updated successfully');

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Loader2, PlugZap, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,6 @@ import {
   resolveMissingNodePackages,
 } from '@/services/MissingNodesService';
 import { globalWebSocketService } from '@/infrastructure/websocket/GlobalWebSocketService';
-import ComfyUIService from '@/infrastructure/api/ComfyApiClient';
 
 interface MissingNodeInstallerModalProps {
   isOpen: boolean;
@@ -52,6 +52,7 @@ export const MissingNodeInstallerModal: React.FC<MissingNodeInstallerModalProps>
   const [showRebootPrompt, setShowRebootPrompt] = useState(false);
   const pendingInstallCountRef = useRef(0);
   const pendingInstallIdsRef = useRef<Set<string>>(new Set());
+  const navigate = useNavigate();
 
   const installablePackages = useMemo(
     () => packages.filter((pkg) => pkg.isInstallable),
@@ -254,15 +255,11 @@ export const MissingNodeInstallerModal: React.FC<MissingNodeInstallerModalProps>
     }
   };
 
-  const handleRebootServer = async () => {
-    const rebooted = await ComfyUIService.rebootServer();
-    if (rebooted) {
-      toast.success('Server reboot requested. Please wait for ComfyUI to restart.');
-      setShowRebootPrompt(false);
-      onClose();
-    } else {
-      toast.error('Failed to trigger server reboot.');
-    }
+  const handleRebootServer = () => {
+    // Navigate to the reboot page instead of directly calling the API
+    onClose();
+    navigate('/reboot');
+    toast.info('Navigating to server reboot page...');
   };
 
   const renderPackageCard = (pkg: MissingNodePackage) => {
@@ -456,7 +453,7 @@ export const MissingNodeInstallerModal: React.FC<MissingNodeInstallerModalProps>
                       onClick={handleRebootServer}
                     >
                       <span className="flex items-center gap-2">
-                        <RefreshCw className="h-4 w-4" /> Reboot Server
+                        <RefreshCw className="h-4 w-4" /> Go to Reboot Page
                       </span>
                     </Button>
                   )}
