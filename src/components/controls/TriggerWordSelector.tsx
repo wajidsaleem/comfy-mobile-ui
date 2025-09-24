@@ -43,6 +43,12 @@ const TriggerWordSelector: React.FC<TriggerWordSelectorProps> = ({
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const [copiedWord, setCopiedWord] = useState<string | null>(null);
 
+  // Helper function to clean lora names (remove extensions)
+  const cleanLoraName = (loraName: string): string => {
+    // Remove common model file extensions
+    return loraName.replace(/\.(safetensors|ckpt|pt|pth|bin|pkl)$/i, '');
+  };
+
   // Clipboard helper function with fallback (from StringWidget.tsx)
   const copyToClipboard = async (text: string): Promise<boolean> => {
     try {
@@ -357,17 +363,20 @@ const TriggerWordSelector: React.FC<TriggerWordSelectorProps> = ({
                         onClick={() => toggleLoraExpansion(group.loraName)}
                         className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/20 dark:hover:bg-slate-700/20 transition-colors"
                       >
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 min-w-0 flex-1">
                           {group.isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-slate-500" />
+                            <ChevronDown className="h-4 w-4 text-slate-500 flex-shrink-0" />
                           ) : (
-                            <ChevronRight className="h-4 w-4 text-slate-500" />
+                            <ChevronRight className="h-4 w-4 text-slate-500 flex-shrink-0" />
                           )}
-                          <span className="font-medium text-slate-900 dark:text-slate-100 text-left">
-                            {group.loraName}
+                          <span
+                            className="font-medium text-slate-900 dark:text-slate-100 text-left truncate"
+                            title={cleanLoraName(group.loraName)}
+                          >
+                            {cleanLoraName(group.loraName)}
                           </span>
                         </div>
-                        <Badge variant="secondary" className="bg-white/50 dark:bg-slate-800/50 text-xs">
+                        <Badge variant="secondary" className="bg-white/50 dark:bg-slate-800/50 text-xs ml-2 flex-shrink-0">
                           {group.triggerWords.length}
                         </Badge>
                       </button>

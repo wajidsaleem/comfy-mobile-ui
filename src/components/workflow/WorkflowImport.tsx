@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Download, Server, AlertCircle, CheckCircle, Loader2, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Download, Server, AlertCircle, CheckCircle, Loader2, ExternalLink, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,15 @@ const WorkflowImport: React.FC = () => {
     workflow: null,
     filename: '',
     errorMessage: ''
+  });
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Filter workflows based on search query
+  const filteredWorkflows = serverWorkflows.filter(workflow => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    const name = (workflow.filename || workflow.name || '').toLowerCase();
+    return name.includes(query);
   });
 
   // Load workflows when server requirements are met
@@ -353,7 +362,7 @@ const WorkflowImport: React.FC = () => {
       }}
     >
       {/* Main Background with Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-blue-50/30 to-cyan-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900" />
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-slate-50 to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900" />
       
       {/* Glassmorphism Background Overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-slate-900/10 pointer-events-none" />
@@ -390,18 +399,18 @@ const WorkflowImport: React.FC = () => {
               sessionStorage.setItem('app-navigation', 'true');
               navigate('/', { replace: true });
             }}
-            variant="default"
-            size="sm"
-            className="bg-white/20 dark:bg-slate-700/20 backdrop-blur-sm border border-white/30 dark:border-slate-600/30 shadow-lg hover:shadow-xl hover:bg-white/30 dark:hover:bg-slate-700/30 transition-all duration-300 h-10 w-10 p-0 flex-shrink-0 rounded-lg"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 p-0 flex-shrink-0 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-600 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
             style={{ touchAction: 'manipulation' }}
           >
-            <ArrowLeft className="w-4 h-4 text-white" />
+            <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div>
+          <div className="flex-1">
             <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
               Import from ComfyUI Server
             </h1>
-            <p className="text-slate-500 dark:text-slate-400">
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
               Download workflows from your ComfyUI server
             </p>
           </div>
@@ -570,34 +579,59 @@ const WorkflowImport: React.FC = () => {
         {/* Server Workflows List */}
         {isConnected && hasExtension && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-white">
-                Server Workflows ({serverWorkflows.length})
-              </h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={loadServerWorkflows}
-                className="text-white/70 border-white/20 hover:bg-white/10 active:bg-white/20 touch-manipulation min-h-[44px] select-none"
-                style={{ touchAction: 'manipulation' }}
-              >
-                Refresh
-              </Button>
+            {/* Search Bar and Count */}
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search workflows..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 focus:border-transparent transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  {searchQuery ? `Found ${filteredWorkflows.length} workflows` : `Server Workflows (${serverWorkflows.length})`}
+                </h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadServerWorkflows}
+                  className="text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </Button>
+              </div>
             </div>
 
-            {serverWorkflows.length === 0 ? (
+            {filteredWorkflows.length === 0 ? (
               <Card className="bg-white/5 border-white/10">
                 <CardContent className="py-12 text-center">
                   <Server className="h-12 w-12 mx-auto mb-4 text-white/40" />
-                  <p className="text-white/60">No workflows found on server</p>
+                  <p className="text-white/60">
+                    {searchQuery ? 'No workflows match your search' : 'No workflows found on server'}
+                  </p>
                   <p className="text-white/40 text-sm mt-2">
-                    Save some workflows in ComfyUI to see them here
+                    {searchQuery ? 'Try a different search term' : 'Save some workflows in ComfyUI to see them here'}
                   </p>
                 </CardContent>
               </Card>
             ) : (
               <div className="grid gap-4">
-                {serverWorkflows.map((workflow, index) => (
+                {filteredWorkflows.map((workflow, index) => (
                   <motion.div
                     key={workflow.filename}
                     initial={{ opacity: 0, y: 20 }}
@@ -608,19 +642,19 @@ const WorkflowImport: React.FC = () => {
                       isImporting === workflow.filename ? 'opacity-70 pointer-events-none' : ''
                     }`}>
                       <CardContent className="p-4">
-                        <div className="grid grid-cols-[1fr_auto] gap-3 items-start w-full">
-                          <div className="min-w-0 overflow-hidden">
-                            <h3 className="font-medium text-white mb-1 text-ellipsis overflow-hidden whitespace-nowrap max-w-[200px] sm:max-w-[300px] md:max-w-[400px]">
+                        <div className="flex gap-4 items-center w-full">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-white mb-2 break-all leading-tight">
                               {workflow.filename?.replace(/\.json$/i, '') || 'Untitled'}
                             </h3>
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm text-white/60">
                               <span className="whitespace-nowrap">{formatFileSize(workflow.size || 0)}</span>
-                              <span className="text-ellipsis overflow-hidden whitespace-nowrap max-w-[180px] sm:max-w-[250px]">
+                              <span className="truncate">
                                 Modified: {formatDate(workflow.modified?.getTime() || Date.now())}
                               </span>
                             </div>
                           </div>
-                          
+
                           <Button
                             onClick={() => importWorkflow(workflow)}
                             onTouchEnd={(e) => {
@@ -630,7 +664,8 @@ const WorkflowImport: React.FC = () => {
                               }
                             }}
                             disabled={isImporting === workflow.filename}
-                            className="bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white disabled:opacity-70 whitespace-nowrap w-auto touch-manipulation min-h-[44px] select-none"
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white disabled:opacity-70 whitespace-nowrap flex-shrink-0 touch-manipulation min-h-[38px] select-none shadow-sm hover:shadow-md transition-all"
                             style={{ touchAction: 'manipulation' }}
                           >
                             {isImporting === workflow.filename ? (
@@ -697,7 +732,7 @@ const WorkflowImport: React.FC = () => {
               </Button>
               <Button
                 onClick={handleOverrideConfirm}
-                className="bg-purple-500/80 backdrop-blur-sm hover:bg-purple-500/90 text-white border border-purple-400/30 hover:border-purple-400/50 transition-all duration-300"
+                className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition-all duration-300"
               >
                 Import Anyway
               </Button>

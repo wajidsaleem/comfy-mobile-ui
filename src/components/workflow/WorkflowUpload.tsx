@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Upload, Server, AlertCircle, CheckCircle, Loader2, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Upload, Server, AlertCircle, CheckCircle, Loader2, ExternalLink, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,15 @@ const WorkflowUpload: React.FC = () => {
     workflow: null,
     filename: '',
     errorMessage: ''
+  });
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Filter workflows based on search query
+  const filteredWorkflows = localWorkflows.filter(workflow => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    const name = (workflow.name || '').toLowerCase();
+    return name.includes(query);
   });
 
   // Load local workflows from IndexedDB
@@ -427,34 +436,59 @@ const WorkflowUpload: React.FC = () => {
         {/* Local Workflows List */}
         {!isLoading && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-white">
-                Local Workflows ({localWorkflows.length})
-              </h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={loadLocalWorkflows}
-                className="text-white/70 border-white/20 hover:bg-white/10 active:bg-white/20 touch-manipulation min-h-[44px] select-none"
-                style={{ touchAction: 'manipulation' }}
-              >
-                Refresh
-              </Button>
+            {/* Search Bar and Count */}
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search workflows..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-600 focus:border-transparent transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  {searchQuery ? `Found ${filteredWorkflows.length} workflows` : `Local Workflows (${localWorkflows.length})`}
+                </h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadLocalWorkflows}
+                  className="text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </Button>
+              </div>
             </div>
 
-            {localWorkflows.length === 0 ? (
+            {filteredWorkflows.length === 0 ? (
               <Card className="bg-white/5 border-white/10">
                 <CardContent className="py-12 text-center">
                   <Upload className="h-12 w-12 mx-auto mb-4 text-white/40" />
-                  <p className="text-white/60">No workflows available for upload</p>
+                  <p className="text-white/60">
+                    {searchQuery ? 'No workflows match your search' : 'No workflows available for upload'}
+                  </p>
                   <p className="text-white/40 text-sm mt-2">
-                    Create some workflows to upload them to ComfyUI server
+                    {searchQuery ? 'Try a different search term' : 'Create some workflows to upload them to ComfyUI server'}
                   </p>
                 </CardContent>
               </Card>
             ) : (
               <div className="grid gap-4">
-                {localWorkflows.map((workflow, index) => (
+                {filteredWorkflows.map((workflow, index) => (
                   <motion.div
                     key={workflow.id}
                     initial={{ opacity: 0, y: 20 }}
@@ -465,26 +499,27 @@ const WorkflowUpload: React.FC = () => {
                       isUploading === workflow.id ? 'opacity-70 pointer-events-none' : ''
                     }`}>
                       <CardContent className="p-4">
-                        <div className="grid grid-cols-[1fr_auto] gap-3 items-start w-full">
-                          <div className="min-w-0 overflow-hidden">
-                            <h3 className="font-medium text-white mb-1 text-ellipsis overflow-hidden whitespace-nowrap max-w-[200px] sm:max-w-[300px] md:max-w-[400px]">
+                        <div className="flex gap-4 items-center w-full">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-white mb-2 break-all leading-tight">
                               {workflow.name || 'Untitled Workflow'}
                             </h3>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm text-white/60">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm text-white/60">
                               <span className="whitespace-nowrap">{formatFileSize(workflow.workflow_json)}</span>
-                              <span className="text-ellipsis overflow-hidden whitespace-nowrap max-w-[180px] sm:max-w-[250px]">
+                              <span className="truncate">
                                 Modified: {formatDate(workflow.modifiedAt || new Date())}
                               </span>
-                              <span className="text-xs text-purple-400">
+                              <span className="text-xs text-blue-400 whitespace-nowrap">
                                 {(workflow.workflow_json && typeof workflow.workflow_json === 'object' && 'nodes' in workflow.workflow_json && Array.isArray(workflow.workflow_json.nodes) ? workflow.workflow_json.nodes.length : 0)} nodes
                               </span>
                             </div>
                           </div>
-                          
+
                           <Button
                             onClick={() => uploadWorkflow(workflow)}
                             disabled={isUploading === workflow.id || !isConnected || !hasExtension}
-                            className="bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white disabled:opacity-70 whitespace-nowrap w-auto touch-manipulation min-h-[44px] select-none"
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white disabled:opacity-70 whitespace-nowrap flex-shrink-0 touch-manipulation min-h-[38px] select-none shadow-sm hover:shadow-md transition-all"
                             style={{ touchAction: 'manipulation' }}
                           >
                             {isUploading === workflow.id ? (
@@ -551,7 +586,7 @@ const WorkflowUpload: React.FC = () => {
               </Button>
               <Button
                 onClick={handleOverrideConfirm}
-                className="bg-red-500/80 backdrop-blur-sm hover:bg-red-500/90 text-white border border-red-400/30 hover:border-red-400/50 transition-all duration-300"
+                className="bg-red-600 hover:bg-red-700 text-white shadow-sm hover:shadow-md transition-all duration-300"
               >
                 Overwrite
               </Button>
