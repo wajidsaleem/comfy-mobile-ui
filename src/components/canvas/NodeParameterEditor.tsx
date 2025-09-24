@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ExternalLink, Play, Target, Edit, ArrowDownToLine, ArrowUpFromLine, X } from 'lucide-react';
+import { ExternalLink, Play, Target, Edit, ArrowDownToLine, ArrowUpFromLine, X, Image as ImageIcon, SlidersHorizontal, CheckCircle2 } from 'lucide-react';
 import { OutputsGallery } from '@/components/media/OutputsGallery';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -161,18 +161,13 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
   // Handle file selection from OutputsGallery
   const handleFileSelect = (filename: string) => {
     if (fileSelectionState.paramName && setWidgetValue) {
-      console.log('🎯 Direct save for IMAGE/VIDEO:', fileSelectionState.paramName, '=', filename);
-      
       // Directly save the value without any editing mode
       setWidgetValue(nodeId, fileSelectionState.paramName, filename);
-      
-      console.log('✅ Direct save completed');
     } else if (fileSelectionState.paramName) {
       // Fallback: use the old editing mode method if setWidgetValue is not available
-      console.log('⚠️ Fallback to editing mode method');
       const widgets = selectedNode.getWidgets ? selectedNode.getWidgets() : [];
       const widgetIndex = widgets.findIndex(w => w.name === fileSelectionState.paramName);
-      
+
       onStartEditing(nodeId, fileSelectionState.paramName, filename, widgetIndex >= 0 ? widgetIndex : undefined);
       setTimeout(() => {
         onEditingValueChange(filename);
@@ -181,7 +176,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
         }, 50);
       }, 50);
     }
-    
+
     // Close file selection modal
     setFileSelectionState({ isOpen: false, paramName: null, paramType: null });
   };
@@ -206,7 +201,6 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
     // // Check if there's a modified videopreview value using getWidgetValue
     // const videoPreviewValue = getWidgetValue(nodeId, 'videopreview', undefined);
     // if (videoPreviewValue?.params) {
-    //   console.log(`🎥 Found video preview in widget values for node ${nodeId}:`, videoPreviewValue.params);
     //   return videoPreviewValue.params;
     // }
     
@@ -215,7 +209,6 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
     //   const widgets = selectedNode.getWidgets();
     //   const videoWidget = widgets.find((w: any) => w.name === 'videopreview' || w.type === 'videopreview');
     //   if (videoWidget?.value?.params) {
-    //     console.log(`🎥 Found video preview in ComfyGraphNode widgets for node ${nodeId}:`, videoWidget.value.params);
     //     return videoWidget.value.params;
     //   }
     // }
@@ -238,7 +231,6 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
     //   }
     // }
 
-    // console.log(`🎥 Video preview check for node ${nodeId}:`, videoPreview);
     return null;
   };
 
@@ -407,7 +399,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
     return input?.link !== null && input?.link !== undefined;
   };
 
-  const renderParameterSection = (title: string, params: IProcessedParameter[], icon: string, isWidgetValues: boolean = false) => {
+  const renderParameterSection = (title: string, params: IProcessedParameter[], icon: React.ReactNode, isWidgetValues: boolean = false) => {
     if (!params || params.length === 0) return null;
 
     // Check if this is a PointsEditor node
@@ -475,7 +467,6 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
                         modifiedHighlightClasses={getModifiedClasses(param.name)}
                         onStartEditing={(nodeId, paramName, value) => {
                           // For IMAGE/VIDEO parameters, open OutputsGallery immediately instead of edit mode
-                          console.log('🔍 Opening OutputsGallery for IMAGE/VIDEO:', paramName);
                           setFileSelectionState({
                             isOpen: true,
                             paramName: paramName,
@@ -961,7 +952,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
       {imagePreview && (
         <div className="space-y-3">
           <h4 className="text-md font-medium text-slate-700 dark:text-slate-300 flex items-center space-x-2">
-            <span>🖼️</span>
+            <ImageIcon className="w-4 h-4" />
             <span>Image Preview</span>
           </h4>
           <InlineImagePreview
@@ -983,7 +974,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
       )}
 
       {/* ComfyGraphNode Widgets */}
-      {widgets.length > 0 && renderParameterSection("Node Widgets", widgets, "🎛️", true)}
+      {widgets.length > 0 && renderParameterSection("Node Widgets", widgets, <SlidersHorizontal className="w-4 h-4" />, true)}
 
       {/* Fallback to raw widget values if no structured widgets */}
       {widgets.length === 0 && selectedNode.widgets_values && (
@@ -1037,7 +1028,7 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
             <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
               <div className="flex items-start space-x-2">
                 <div className="text-emerald-600 dark:text-emerald-400 mt-0.5">
-                  🎯
+                  <CheckCircle2 className="h-4 w-4" />
                 </div>
                 <div className="text-xs text-emerald-700 dark:text-emerald-300">
                   <div className="font-medium mb-1">Output Node Detected</div>
@@ -1058,13 +1049,13 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
   ];
 
   return (
-    <div className="h-full overflow-hidden">
+    <div className="flex-1 h-full min-h-0 overflow-hidden">
       <div
-        className="flex h-full transition-transform duration-300 ease-out"
+        className="flex h-full min-h-0 transition-transform duration-300 ease-out"
         style={{ transform: `translateX(-${currentSlide * 100}%)` }}
       >
         {slides.map((slide) => (
-          <div key={slide.id} className="w-full flex-shrink-0 overflow-y-auto p-4">
+          <div key={slide.id} className="w-full h-full min-h-0 flex-shrink-0 overflow-y-auto p-4 pb-32">
             {slide.content || (
               <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-600">
                 <div className="text-center space-y-2">

@@ -4,12 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, RefreshCw, Edit3, Check, X, ChevronLeft, ChevronRight, ArrowDownToLine, ArrowUpFromLine, Palette, Settings, Maximize2 } from 'lucide-react';
+import { Trash2, RefreshCw, Edit3, Check, X, ChevronLeft, ChevronRight, ArrowDownToLine, ArrowUpFromLine, Settings } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { INodeWithMetadata } from '@/shared/types/comfy/IComfyObjectInfo';
 import { ComfyGraphNode } from '@/core/domain/ComfyGraphNode';
 import { NodeMode } from '@/shared/types/app/base';
 import { NodeParameterEditor } from '@/components/canvas/NodeParameterEditor';
+import { NodeSettingsEditor } from '@/components/canvas/NodeSettingsEditor';
 import { GroupInspector } from '@/components/canvas/GroupInspector';
 import { globalWebSocketService } from '@/infrastructure/websocket/GlobalWebSocketService';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -87,342 +88,6 @@ interface NodeInspectorProps {
   onDisconnectOutput?: (nodeId: number, outputSlot: number, linkId: number) => void;
 }
 
-// Available node background colors (reduced similar colors)
-const NODE_COLORS = [
-  { name: 'Brown', value: '#593930' },
-  { name: 'Teal', value: '#3f5159' },
-  { name: 'Blue', value: '#29699c' },
-  { name: 'Purple', value: '#335' },
-  { name: 'Green', value: '#353' },
-  { name: 'Red', value: '#653' },
-  { name: 'Blue Gray', value: '#364254' },
-  { name: 'Black', value: '#000' }
-];
-
-interface ColorPickerProps {
-  selectedColor?: string;
-  onColorChange: (color: string) => void;
-}
-
-const ColorPicker: React.FC<ColorPickerProps> = ({ selectedColor, onColorChange }) => {
-  // Check if current color is in predefined colors
-  const isColorInPredefined = selectedColor && NODE_COLORS.some(color => color.value === selectedColor);
-  const isNoneSelected = !selectedColor || !isColorInPredefined;
-
-  return (
-    <div className="space-y-2">
-      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Node Color:</span>
-      <div className="flex flex-wrap gap-2">
-        {/* Clear/None option */}
-        <button
-          onClick={() => onColorChange('')}
-          className={`w-10 h-10 rounded-lg border-2 transition-all flex items-center justify-center ${
-            isNoneSelected
-              ? 'border-blue-500 scale-105 shadow-lg bg-slate-100 dark:bg-slate-800' 
-              : 'border-gray-300 dark:border-gray-600 hover:scale-105 bg-slate-50 dark:bg-slate-900'
-          }`}
-          title="Clear color / Default"
-        >
-          <span className="text-lg font-bold text-slate-600 dark:text-slate-400">×</span>
-        </button>
-        
-        {/* Color options */}
-        {NODE_COLORS.map((color) => (
-          <button
-            key={color.value}
-            onClick={() => onColorChange(color.value)}
-            className={`w-10 h-10 rounded-lg border-2 transition-all shadow-sm ${
-              selectedColor === color.value 
-                ? 'border-blue-500 scale-105 shadow-lg ring-2 ring-blue-200 dark:ring-blue-800' 
-                : 'border-gray-300 dark:border-gray-600 hover:scale-105 hover:shadow-md'
-            }`}
-            style={{ backgroundColor: color.value }}
-            title={color.name}
-          />
-        ))}
-        
-        {/* Show custom color indicator if selected color is not in predefined list */}
-        {selectedColor && !isColorInPredefined && (
-          <div
-            className="w-10 h-10 rounded-lg border-2 border-orange-500 scale-105 shadow-lg ring-2 ring-orange-200 dark:ring-orange-800 relative"
-            style={{ backgroundColor: selectedColor }}
-            title={`Custom color: ${selectedColor}`}
-          >
-            <div className="absolute -top-1 -right-1 w-3 h-3 bg-orange-500 rounded-full text-xs text-white flex items-center justify-center">
-              <span className="text-[8px] font-bold">C</span>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-interface NodeSizeControlProps {
-  selectedNode: ComfyGraphNode;
-  onSizeChange?: (width: number, height: number) => void;
-  onCollapseChange?: (collapsed: boolean) => void;
-}
-
-const NodeSizeControl: React.FC<NodeSizeControlProps> = ({
-  selectedNode,
-  onSizeChange,
-  onCollapseChange,
-}) => {
-  // Get current node size, defaulting to reasonable values
-  const currentWidth = selectedNode.size?.[0] || 200;
-  const currentHeight = selectedNode.size?.[1] || 100;
-  const isCollapsed = selectedNode.flags?.collapsed === true;
-
-  // Store original values when component first mounts or node changes
-  const [originalWidth, setOriginalWidth] = useState(currentWidth);
-  const [originalHeight, setOriginalHeight] = useState(currentHeight);
-  const [originalCollapsed, setOriginalCollapsed] = useState(isCollapsed);
-
-  // Local state for real-time preview
-  const [previewWidth, setPreviewWidth] = useState(currentWidth);
-  const [previewHeight, setPreviewHeight] = useState(currentHeight);
-  const [previewCollapsed, setPreviewCollapsed] = useState(isCollapsed);
-
-  // Update states when selectedNode changes (different node selected)
-  useEffect(() => {
-    const newWidth = selectedNode.size?.[0] || 200;
-    const newHeight = selectedNode.size?.[1] || 100;
-    const newCollapsed = selectedNode.flags?.collapsed === true;
-
-    // Only update if this is a different node (by comparing current vs stored original)
-    if (newWidth !== originalWidth || newHeight !== originalHeight || newCollapsed !== originalCollapsed) {
-      setOriginalWidth(newWidth);
-      setOriginalHeight(newHeight);
-      setOriginalCollapsed(newCollapsed);
-      setPreviewWidth(newWidth);
-      setPreviewHeight(newHeight);
-      setPreviewCollapsed(newCollapsed);
-    }
-  }, [selectedNode.id]); // Only depend on node ID to detect node changes
-
-  // Handle width change
-  const handleWidthChange = (values: number[]) => {
-    const newWidth = values[0];
-    setPreviewWidth(newWidth);
-    if (onSizeChange) {
-      onSizeChange(newWidth, previewHeight);
-    }
-  };
-
-  // Handle height change
-  const handleHeightChange = (values: number[]) => {
-    const newHeight = values[0];
-    setPreviewHeight(newHeight);
-    if (onSizeChange) {
-      onSizeChange(previewWidth, newHeight);
-    }
-  };
-
-  // Handle collapse toggle
-  const handleCollapseChange = (collapsed: boolean) => {
-    setPreviewCollapsed(collapsed);
-    if (onCollapseChange) {
-      onCollapseChange(collapsed);
-    }
-  };
-
-  // Calculate relative size change based on original values
-  const widthChange = ((previewWidth - originalWidth) / originalWidth * 100).toFixed(0);
-  const heightChange = ((previewHeight - originalHeight) / originalHeight * 100).toFixed(0);
-
-  // Calculate preview dimensions for overlapping boxes
-  const maxContainerWidth = 120;
-  const maxContainerHeight = 80;
-
-  // Calculate scale factor based on the larger of original or new size
-  const maxWidth = Math.max(originalWidth, previewCollapsed ? originalWidth : previewWidth);
-  const maxHeight = Math.max(originalHeight, previewCollapsed ? 30 : previewHeight);
-
-  const scaleX = maxContainerWidth / maxWidth;
-  const scaleY = maxContainerHeight / maxHeight;
-  const scale = Math.min(scaleX, scaleY, 1) * 0.8; // 80% of calculated scale for padding
-
-  // Calculate display dimensions
-  const originalDisplayWidth = originalCollapsed ? 80 * scale : originalWidth * scale;
-  const originalDisplayHeight = originalCollapsed ? 30 * scale : originalHeight * scale;
-
-  let newDisplayWidth, newDisplayHeight;
-  if (previewCollapsed) {
-    newDisplayWidth = 80 * scale; // Fixed collapsed width (80px)
-    newDisplayHeight = 30 * scale; // Fixed collapsed height (30px)
-  } else {
-    newDisplayWidth = previewWidth * scale;
-    newDisplayHeight = previewHeight * scale;
-  }
-
-  // Determine container size (use the larger of original or new)
-  const containerWidth = Math.max(originalDisplayWidth, newDisplayWidth);
-  const containerHeight = Math.max(originalDisplayHeight, newDisplayHeight);
-
-  return (
-    <div className="space-y-4">
-      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Node Size:</span>
-
-      {/* Size Controls */}
-      <div className="space-y-6">
-        {/* Width Slider */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <label className="text-base font-medium text-slate-600 dark:text-slate-400">Width</label>
-            <div className="flex items-center space-x-3">
-              <span className="text-sm font-mono text-slate-700 dark:text-slate-300 min-w-[80px] text-right">
-                {Math.round(previewWidth)}px
-              </span>
-              {Math.abs(Number(widthChange)) > 0 && (
-                <span className={`text-sm font-medium min-w-[50px] text-right ${
-                  Number(widthChange) > 0
-                    ? 'text-green-600 dark:text-green-400'
-                    : 'text-red-600 dark:text-red-400'
-                }`}>
-                  {Number(widthChange) > 0 ? '+' : ''}{widthChange}%
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="px-2 py-2">
-            <Slider
-              value={[previewWidth]}
-              onValueChange={handleWidthChange}
-              min={80}
-              max={1600}
-              step={10}
-              className="w-full [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_.slider-track]:h-2"
-              disabled={previewCollapsed}
-            />
-          </div>
-        </div>
-
-        {/* Height Slider */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <label className="text-base font-medium text-slate-600 dark:text-slate-400">Height</label>
-            <div className="flex items-center space-x-3">
-              <span className="text-sm font-mono text-slate-700 dark:text-slate-300 min-w-[80px] text-right">
-                {Math.round(previewHeight)}px
-              </span>
-              {Math.abs(Number(heightChange)) > 0 && (
-                <span className={`text-sm font-medium min-w-[50px] text-right ${
-                  Number(heightChange) > 0
-                    ? 'text-green-600 dark:text-green-400'
-                    : 'text-red-600 dark:text-red-400'
-                }`}>
-                  {Number(heightChange) > 0 ? '+' : ''}{heightChange}%
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="px-2 py-2">
-            <Slider
-              value={[previewHeight]}
-              onValueChange={handleHeightChange}
-              min={30}
-              max={1600}
-              step={10}
-              className="w-full [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_.slider-track]:h-2"
-              disabled={previewCollapsed}
-            />
-          </div>
-        </div>
-
-        {/* Collapse Toggle */}
-        <div className="flex items-center justify-between py-3 px-2">
-          <label className="text-base font-medium text-slate-600 dark:text-slate-400">Collapsed</label>
-          <div className="scale-125">
-            <Switch
-              checked={previewCollapsed}
-              onCheckedChange={handleCollapseChange}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Size Preview */}
-      <div className="space-y-4 mt-8">
-        <span className="text-base font-medium text-slate-600 dark:text-slate-400">Preview:</span>
-        <div className="flex flex-col items-center p-6 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-          {/* Overlapping boxes container */}
-          <div
-            className="relative flex items-center justify-center"
-            style={{
-              width: `${containerWidth + 20}px`,
-              height: `${containerHeight + 20}px`,
-              minWidth: '80px',
-              minHeight: '60px'
-            }}
-          >
-            {/* Original size box (always rendered first, behind) */}
-            <div
-              className={`absolute border-2 rounded-sm transition-all ${
-                originalCollapsed
-                  ? 'bg-gray-200/70 dark:bg-gray-700/70 border-gray-400 dark:border-gray-500'
-                  : 'bg-blue-200/70 dark:bg-blue-800/70 border-blue-400 dark:border-blue-600'
-              }`}
-              style={{
-                width: `${Math.max(originalDisplayWidth, 16)}px`,
-                height: `${Math.max(originalDisplayHeight, 8)}px`,
-                left: '50%',
-                top: '50%',
-                transform: 'translate(-50%, -50%)',
-                zIndex: previewWidth <= originalWidth && previewHeight <= originalHeight ? 2 : 1
-              }}
-              title={`Original: ${originalCollapsed ? '80×30' : `${Math.round(originalWidth)}×${Math.round(originalHeight)}`}${originalCollapsed ? ' (Collapsed)' : ''}`}
-            />
-
-            {/* New size box (rendered on top when larger, behind when smaller) */}
-            <div
-              className={`absolute border-2 rounded-sm transition-all ${
-                previewCollapsed
-                  ? 'bg-gray-300/80 dark:bg-gray-600/80 border-gray-500 dark:border-gray-400'
-                  : 'bg-green-200/80 dark:bg-green-800/80 border-green-400 dark:border-green-600'
-              }`}
-              style={{
-                width: `${Math.max(newDisplayWidth, 16)}px`,
-                height: `${Math.max(newDisplayHeight, 8)}px`,
-                left: '50%',
-                top: '50%',
-                transform: 'translate(-50%, -50%)',
-                zIndex: previewWidth > originalWidth || previewHeight > originalHeight ? 2 : 1
-              }}
-              title={`New: ${previewCollapsed ? '80×30' : `${Math.round(previewWidth)}×${Math.round(previewHeight)}`}${previewCollapsed ? ' (Collapsed)' : ''}`}
-            />
-          </div>
-
-          {/* Size information */}
-          <div className="flex flex-col items-center space-y-3 mt-6 text-sm">
-            <div className="flex items-center space-x-2">
-              <div className={`w-4 h-4 rounded-sm border ${
-                originalCollapsed
-                  ? 'bg-gray-200 dark:bg-gray-700 border-gray-400 dark:border-gray-500'
-                  : 'bg-blue-200 dark:bg-blue-800 border-blue-400 dark:border-blue-600'
-              }`} />
-              <span className="text-slate-600 dark:text-slate-400 font-medium">
-                Original: {originalCollapsed ? '80×30' : `${Math.round(originalWidth)}×${Math.round(originalHeight)}`}
-                {originalCollapsed && ' (Collapsed)'}
-              </span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className={`w-4 h-4 rounded-sm border ${
-                previewCollapsed
-                  ? 'bg-gray-300 dark:bg-gray-600 border-gray-500 dark:border-gray-400'
-                  : 'bg-green-200 dark:bg-green-800 border-green-400 dark:border-green-600'
-              }`} />
-              <span className="text-slate-600 dark:text-slate-300 font-medium">
-                New: {previewCollapsed ? '80×30' : `${Math.round(previewWidth)}×${Math.round(previewHeight)}`}
-                {previewCollapsed && ' (Collapsed)'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export const NodeInspector: React.FC<NodeInspectorProps> = ({
   selectedNode,
@@ -480,9 +145,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingTitleValue, setEditingTitleValue] = useState('');
   const [currentSlide, setCurrentSlide] = useState(1); // 0: inputs, 1: main, 2: outputs
-  const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
-  const [isNodeModeOpen, setIsNodeModeOpen] = useState(false);
-  const [isNodeSizeOpen, setIsNodeSizeOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPromptExecuting, setIsPromptExecuting] = useState(() => {
     // Initialize with current execution state to prevent animation flash
     const currentState = globalWebSocketService.getCurrentExecutionState();
@@ -736,72 +399,20 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   <RefreshCw className="h-4 w-4" />
                 </Button>
               )}
-              {/* Color Picker Button */}
-              {onNodeColorChange && (
-                <Button
-                  onClick={() => {
-                    setIsColorPickerOpen(!isColorPickerOpen);
-                    if (!isColorPickerOpen) setIsNodeModeOpen(false); // Close node mode when opening color picker
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className={`h-9 w-9 p-0 flex-shrink-0 rounded-lg transition-all ${
-                    isColorPickerOpen
-                      ? 'bg-purple-100 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400'
-                      : 'hover:bg-purple-100 dark:hover:bg-purple-900/20 text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300'
-                  }`}
-                  title="Change node color"
-                  style={{
-                    backgroundColor: currentBgColor && !isColorPickerOpen
-                      ? `${currentBgColor}40` // 25% opacity
-                      : undefined
-                  }}
-                >
-                  <Palette className="h-4 w-4" />
-                </Button>
-              )}
-              {/* Node Mode Button */}
+              {/* Settings Button - Now combines all settings */}
               <Button
-                onClick={() => {
-                  setIsNodeModeOpen(!isNodeModeOpen);
-                  if (!isNodeModeOpen) {
-                    setIsColorPickerOpen(false); // Close color picker when opening node mode
-                    setIsNodeSizeOpen(false); // Close node size when opening node mode
-                  }
-                }}
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                 variant="ghost"
                 size="sm"
                 className={`h-9 w-9 p-0 flex-shrink-0 rounded-lg transition-all ${
-                  isNodeModeOpen
+                  isSettingsOpen
                     ? 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'
                     : 'hover:bg-orange-100 dark:hover:bg-orange-900/20 text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300'
                 }`}
-                title="Node execution mode"
+                title="Node settings"
               >
                 <Settings className="h-4 w-4" />
               </Button>
-              {/* Node Size Button */}
-              {(onNodeSizeChange || onNodeCollapseChange) && (
-                <Button
-                  onClick={() => {
-                    setIsNodeSizeOpen(!isNodeSizeOpen);
-                    if (!isNodeSizeOpen) {
-                      setIsColorPickerOpen(false); // Close color picker when opening node size
-                      setIsNodeModeOpen(false); // Close node mode when opening node size
-                    }
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  className={`h-9 w-9 p-0 flex-shrink-0 rounded-lg transition-all ${
-                    isNodeSizeOpen
-                      ? 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
-                      : 'hover:bg-indigo-100 dark:hover:bg-indigo-900/20 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300'
-                  }`}
-                  title="Node size and collapse"
-                >
-                  <Maximize2 className="h-4 w-4" />
-                </Button>
-              )}
               {/* Delete Button */}
               {onNodeDelete && (
                 <Button
@@ -837,108 +448,11 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               )}
             </div>
           </div>
-          
-          {/* Collapsible Color Picker */}
-          <AnimatePresence>
-            {onNodeColorChange && isColorPickerOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: 'easeInOut' }}
-                className="overflow-hidden"
-              >
-                <div className="mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
-                  <ColorPicker
-                    selectedColor={currentBgColor}
-                    onColorChange={(color) => {
-                      onNodeColorChange(nodeId, color);
-                      // Don't auto-close, let user pick multiple colors if needed
-                    }}
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Collapsible Node Mode Selector */}
-          <AnimatePresence>
-            {isNodeModeOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: 'easeInOut' }}
-                className="overflow-hidden"
-              >
-                <div className="mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
-                  <div className="space-y-2">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Node Mode:</span>
-                    <SegmentedControl
-                      items={[
-                        {
-                          value: NodeMode.ALWAYS,
-                          label: 'Always',
-                          color: 'text-green-600'
-                        },
-                        {
-                          value: NodeMode.NEVER,
-                          label: 'Mute',
-                          color: 'text-blue-600'
-                        },
-                        {
-                          value: NodeMode.BYPASS,
-                          label: 'Bypass',
-                          color: 'text-purple-600'
-                        }
-                      ]}
-                      value={getNodeMode(nodeId, selectedNode.mode || 0)}
-                      onChange={(mode) => {
-                        onNodeModeChange(nodeId, mode as number);
-                        // Don't auto-close, let user see the selection
-                      }}
-                      size="md"
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Collapsible Node Size Control */}
-          <AnimatePresence>
-            {(onNodeSizeChange || onNodeCollapseChange) && isNodeSizeOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: 'easeInOut' }}
-                className="overflow-hidden"
-              >
-                <div className="mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
-                  <NodeSizeControl
-                    selectedNode={selectedNode}
-                    onSizeChange={(width, height) => {
-                      if (onNodeSizeChange) {
-                        onNodeSizeChange(nodeId, width, height);
-                      }
-                    }}
-                    onCollapseChange={(collapsed) => {
-                      if (onNodeCollapseChange) {
-                        onNodeCollapseChange(nodeId, collapsed);
-                      }
-                    }}
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          </div>
         </div>
 
-        {/* Carousel Navigation */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200/50 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/50">
+        {/* Carousel Navigation - Hide when settings are open */}
+        {!isSettingsOpen && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200/50 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/50">
           <Button
             onClick={() => setCurrentSlide(Math.max(0, currentSlide - 1))}
             disabled={currentSlide === 0}
@@ -994,51 +508,66 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           >
             <ChevronRight className="w-4 h-4" />
           </Button>
-        </div>
+          </div>
+        )}
+      </div>
 
-        {/* Scrollable Content */}
-      <div 
-        className="flex-1 overflow-y-auto p-4"
-        style={{
-          touchAction: 'pan-y pinch-zoom',
-          overscrollBehaviorX: 'none'
-        } as React.CSSProperties}
-        onTouchStart={(e) => {
-          // Prevent horizontal swipe gestures in content area
-          e.stopPropagation();
-        }}
-        onTouchMove={(e) => {
-          const target = e.target as HTMLElement;
-          
-          // Allow slider interactions, but prevent other horizontal swipes
-          if (!target.closest('[role="slider"]') && 
-              !target.closest('[data-slider]') &&
-              !target.closest('[data-radix-slider-root]')) {
-            e.stopPropagation();
-          }
-        }}
-      >
-        <div 
-          className="max-w-4xl mx-auto"
+      {/* Content Area - Either Settings or Parameters */}
+      <div className="flex-1 relative overflow-hidden">
+        {/* NodeSettingsEditor - Shown when settings button is clicked */}
+        <NodeSettingsEditor
+          selectedNode={selectedNode}
+          getNodeMode={getNodeMode}
+          onNodeModeChange={onNodeModeChange}
+          onNodeColorChange={onNodeColorChange}
+          onNodeSizeChange={onNodeSizeChange}
+          onNodeCollapseChange={onNodeCollapseChange}
+          isVisible={isSettingsOpen}
+        />
+
+        {/* NodeParameterEditor - Shown when settings are closed */}
+        <div
+          className={`absolute inset-0 overflow-y-auto p-4 ${isSettingsOpen ? 'hidden' : ''}`}
           style={{
             touchAction: 'pan-y pinch-zoom',
             overscrollBehaviorX: 'none'
           } as React.CSSProperties}
           onTouchStart={(e) => {
+            // Prevent horizontal swipe gestures in content area
             e.stopPropagation();
           }}
           onTouchMove={(e) => {
             const target = e.target as HTMLElement;
-            
-            // Allow slider interactions only
-            if (!target.closest('[role="slider"]') && 
+
+            // Allow slider interactions, but prevent other horizontal swipes
+            if (!target.closest('[role="slider"]') &&
                 !target.closest('[data-slider]') &&
                 !target.closest('[data-radix-slider-root]')) {
               e.stopPropagation();
             }
           }}
         >
-          <NodeParameterEditor
+          <div
+            className="max-w-4xl mx-auto"
+            style={{
+              touchAction: 'pan-y pinch-zoom',
+              overscrollBehaviorX: 'none'
+            } as React.CSSProperties}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchMove={(e) => {
+              const target = e.target as HTMLElement;
+
+              // Allow slider interactions only
+              if (!target.closest('[role="slider"]') &&
+                  !target.closest('[data-slider]') &&
+                  !target.closest('[data-radix-slider-root]')) {
+                e.stopPropagation();
+              }
+            }}
+          >
+            <NodeParameterEditor
             selectedNode={selectedNode}
             metadata={metadata || null}
             metadataLoading={metadataLoading}
@@ -1073,9 +602,10 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             onDisconnectInput={onDisconnectInput}
             onDisconnectOutput={onDisconnectOutput}
           />
+          </div>
         </div>
       </div>
-      
+
       {/* Confirm Delete Dialog */}
       {onNodeDelete && (
         <ConfirmDialog
