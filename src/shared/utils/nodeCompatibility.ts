@@ -31,12 +31,30 @@ export interface CompatibilityResult {
 }
 
 /**
+ * Parse comma-separated types into individual types
+ */
+function parseTypesFromString(typeString: string): string[] {
+  return typeString
+    .split(',')
+    .map(type => type.trim())
+    .filter(type => type.length > 0);
+}
+
+/**
  * Check if two slot types are compatible
  */
 export function areSlotTypesCompatible(outputType: string | string[], inputType: string | string[]): boolean {
   // Handle array types (typically from node metadata definitions)
-  const effectiveOutputType = Array.isArray(outputType) ? outputType : [String(outputType || '')];
-  const effectiveInputType = Array.isArray(inputType) ? inputType : [String(inputType || '')];
+  let effectiveOutputType = Array.isArray(outputType) ? outputType : [String(outputType || '')];
+  let effectiveInputType = Array.isArray(inputType) ? inputType : [String(inputType || '')];
+
+  // Parse comma-separated types for non-array string types
+  if (!Array.isArray(outputType) && typeof outputType === 'string' && outputType.includes(',')) {
+    effectiveOutputType = parseTypesFromString(outputType);
+  }
+  if (!Array.isArray(inputType) && typeof inputType === 'string' && inputType.includes(',')) {
+    effectiveInputType = parseTypesFromString(inputType);
+  }
 
   // Skip empty types
   if (effectiveOutputType.length === 0 || effectiveInputType.length === 0) {
