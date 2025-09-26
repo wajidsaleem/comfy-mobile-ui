@@ -307,12 +307,13 @@ class EnhancedExternalComfyUIWatchdog:
             sys.exit(1)
         
         self.check_interval = 30
-        
+        self.initial_check_interval = 5  # Fast check interval during initial startup
+
         # API server configuration
         self.api_enabled = True
         self.api_port = api_port
         self.api_host = '0.0.0.0'
-        
+
         # Runtime state
         self.comfyui_process: Optional[subprocess.Popen] = None
         self.is_running = True
@@ -502,12 +503,39 @@ class EnhancedExternalComfyUIWatchdog:
         """ComfyUI server response check"""
         try:
             response = requests.get(
-                f"http://localhost:{self.comfyui_port}/", 
+                f"http://localhost:{self.comfyui_port}/",
                 timeout=10
             )
             return response.status_code == 200
         except Exception:
             return False
+
+    def _subscribe_to_logs(self) -> None:
+        """Subscribe to ComfyUI logs after server is ready"""
+        try:
+            # Wait for ComfyUI internal systems to be fully ready
+            self.log(f"⏳ Waiting 20 seconds for ComfyUI internal systems to initialize...", 'info')
+            time.sleep(20)
+
+            url = f"http://127.0.0.1:{self.comfyui_port}/internal/logs/subscribe"
+            client_id = "comfy-mobile-ui-client-2025"
+
+            self.log(f"📋 Subscribing to ComfyUI logs with clientId: {client_id}", 'info')
+
+            response = requests.patch(
+                url,
+                json={"enabled": True, "clientId": client_id},
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                self.log(f"✅ Successfully subscribed to ComfyUI logs", 'success')
+            else:
+                self.log(f"⚠️ Failed to subscribe to logs: HTTP {response.status_code}", 'warning')
+
+        except Exception as e:
+            self.log(f"❌ Error subscribing to logs: {e}", 'error')
     
     def find_comfyui_process(self) -> Optional[psutil.Process]:
         """Find running ComfyUI process"""
@@ -717,6 +745,9 @@ class EnhancedExternalComfyUIWatchdog:
                     response_time = time.time() - wait_start
                     total_time = time.time() - restart_start_time
                     self.log(f"ComfyUI is now responsive! (response in {response_time:.2f}s, total restart {total_time:.2f}s)", 'success')
+
+                    # Log subscription will be handled by monitor_loop automatically
+
                     return True
                 else:
                     elapsed = time.time() - wait_start
@@ -741,8 +772,13 @@ class EnhancedExternalComfyUIWatchdog:
     
     def monitor_loop(self):
         """Main monitoring loop - only status monitoring, no automatic restart"""
-        self.log("[WATCHDOG] Enhanced External Watchdog monitoring started")        
-        
+        self.log("[WATCHDOG] Enhanced External Watchdog monitoring started")
+
+        # Flag to track if we've subscribed to logs on initial startup
+        logs_subscribed = False
+        # Flag to track if server has been detected as responsive at least once
+        server_detected = False
+
         while self.is_running:
             try:
                 # ComfyUI status check only, no automatic restart
@@ -752,13 +788,31 @@ class EnhancedExternalComfyUIWatchdog:
                     if not hasattr(self, '_last_down_logged') or not self._last_down_logged:
                         self.log("[MONITOR] ComfyUI is not responsive - waiting for manual restart request")
                         self._last_down_logged = True
+                    # Reset subscription flag when server goes down
+                    logs_subscribed = False
+                    # Reset server detected flag to use fast check interval again
+                    server_detected = False
                 else:
                     # Log when ComfyUI recovers
                     if hasattr(self, '_last_down_logged') and self._last_down_logged:
                         self.log("[MONITOR] ComfyUI is responsive again")
                         self._last_down_logged = False
-                
-                time.sleep(self.check_interval)
+
+                    # Subscribe to logs on initial startup (once per server lifetime)
+                    if not logs_subscribed:
+                        self._subscribe_to_logs()
+                        logs_subscribed = True
+
+                    # Mark server as detected for switching to normal check interval
+                    if not server_detected:
+                        server_detected = True
+                        self.log(f"[MONITOR] Server detected, switching to normal check interval ({self.check_interval}s)")
+
+                # Use faster check interval during initial startup, slower after server is detected
+                current_interval = self.initial_check_interval if not server_detected else self.check_interval
+                if not server_detected:
+                    self.log(f"[MONITOR] Using fast check interval: {current_interval}s (waiting for server)", 'debug')
+                time.sleep(current_interval)
                 
             except KeyboardInterrupt:
                 self.log("[STOP] Watchdog interrupted by user")

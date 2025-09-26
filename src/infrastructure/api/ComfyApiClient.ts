@@ -7,6 +7,10 @@ import type {
   ExecutionOptions,
   ServerInfo,
 } from '@/shared/types/comfy/IComfyAPI';
+import type {
+  LogsRawResponse,
+  LogSubscribeRequest
+} from '@/core/domain';
 
 export interface CustomNodePackInfo {
   id: string;
@@ -1524,6 +1528,70 @@ const upgradeYtDlp = async (): Promise<any> => {
   }
 };
 
+const subscribeToLogsManually = async (clientId: string = 'comfy-mobile-ui-client-2025'): Promise<any> => {
+  initializeService();
+  try {
+    const response = await axios.post(`${serverUrl}/comfymobile/api/logs/subscribe`, {
+      clientId
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('[ComfyApiClient] Failed to subscribe to logs manually:', error);
+    throw error;
+  }
+};
+
+// Logging APIs
+/**
+ * Get initial raw logs from ComfyUI backend
+ */
+const getRawLogs = async (): Promise<LogsRawResponse> => {
+  initializeService();
+  try {
+    const response = await axios.get(`${serverUrl}/internal/logs/raw`, {
+      timeout: 10000
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('Failed to get raw logs:', error);
+    throw error;
+  }
+};
+
+/**
+ * Subscribe or unsubscribe to real-time logs via WebSocket
+ */
+const subscribeLogs = async (enabled: boolean, clientId: string): Promise<void> => {
+  initializeService();
+  const url = `${serverUrl}/internal/logs/subscribe`;
+
+  try {
+    await axios.patch(url, {
+      enabled,
+      clientId
+    } as LogSubscribeRequest, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+  } catch (error: any) {
+    console.error('[ComfyApiClient] Failed to subscribe logs:', {
+      url,
+      error: error.message,
+      code: error.code,
+      status: error.response?.status,
+      responseData: error.response?.data
+    });
+    throw error;
+  }
+};
+
 /**
  * ComfyUI Service - Pure HTTP API Client
  * 
@@ -1627,7 +1695,12 @@ const ComfyUIService = {
   getVideoDownloadStatus,
   downloadVideo,
   upgradeYtDlp,
-  
+
+  // Logging APIs
+  getRawLogs,
+  subscribeLogs,
+  subscribeToLogsManually,
+
   // Utility methods
   isInitialized: () => isInitialized,
   getServerUrl: () => serverUrl,

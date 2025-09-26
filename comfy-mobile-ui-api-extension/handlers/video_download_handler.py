@@ -3,6 +3,7 @@ import json
 import time
 import asyncio
 import subprocess
+import sys
 from typing import Dict, Any, Optional
 from aiohttp import web
 import folder_paths
@@ -55,8 +56,13 @@ async def download_youtube_video(request):
         print(f"🎥 Starting YouTube video download: {url}")
         print(f"📁 Target directory: {target_dir}")
 
+        # Progress callback to send logs to ComfyUI backend
+        async def progress_callback(message):
+            # Simply print to send to ComfyUI's log interceptor
+            print(message)
+
         # Download video using the async function
-        result = await download_video_async(url, target_dir, filename)
+        result = await download_video_async(url, target_dir, filename, progress_callback)
 
         if result["success"]:
             # Wait a brief moment for file system to fully complete the merge process
@@ -206,7 +212,7 @@ async def get_video_download_status(request):
         # Check if yt-dlp is available
         import subprocess
         try:
-            result = subprocess.run(['yt-dlp', '--version'],
+            result = subprocess.run([sys.executable, '-m', 'yt_dlp', '--version'],
                                   capture_output=True, text=True, check=True)
             yt_dlp_version = result.stdout.strip()
             yt_dlp_available = True
@@ -253,6 +259,46 @@ async def get_video_download_status(request):
             "error": f"Failed to get video download status: {str(e)}"
         }, status=500)
 
+async def subscribe_to_logs(request):
+    """Subscribe to ComfyUI logs (can be called multiple times safely)"""
+    try:
+        data = await request.json()
+        client_id = data.get('clientId', 'comfy-mobile-ui-client-2025')
+
+        # Get the current ComfyUI port dynamically
+        from ..comfyui_detector import detect_comfyui_port
+        comfyui_port = detect_comfyui_port()
+
+        import aiohttp
+        url = f"http://127.0.0.1:{comfyui_port}/internal/logs/subscribe"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.patch(
+                url,
+                json={"enabled": True, "clientId": client_id},
+                headers={"Content-Type": "application/json"},
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+                if response.status == 200:
+                    return web.json_response({
+                        "success": True,
+                        "message": "Successfully subscribed to logs",
+                        "clientId": client_id
+                    })
+                else:
+                    error_text = await response.text()
+                    return web.json_response({
+                        "success": False,
+                        "error": f"Failed to subscribe: HTTP {response.status}",
+                        "details": error_text
+                    }, status=response.status)
+
+    except Exception as e:
+        return web.json_response({
+            "success": False,
+            "error": f"Failed to subscribe to logs: {str(e)}"
+        }, status=500)
+
 async def upgrade_yt_dlp(request):
     """Upgrade yt-dlp to the latest version"""
     try:
@@ -260,7 +306,7 @@ async def upgrade_yt_dlp(request):
 
         # Execute pip upgrade command asynchronously
         process = await asyncio.create_subprocess_exec(
-            'pip', 'install', '--upgrade', 'yt-dlp',
+            sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp',
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -275,7 +321,7 @@ async def upgrade_yt_dlp(request):
             # Get the new version after upgrade
             try:
                 version_process = await asyncio.create_subprocess_exec(
-                    'yt-dlp', '--version',
+                    sys.executable, '-m', 'yt_dlp', '--version',
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
@@ -301,7 +347,7 @@ async def upgrade_yt_dlp(request):
             }, status=500)
 
     except FileNotFoundError:
-        error_msg = "pip command not found. Please ensure Python and pip are properly installed."
+        error_msg = "Python executable not found. Please ensure Python is properly installed."
         print(f"❌ {error_msg}")
         return web.json_response({
             "success": False,

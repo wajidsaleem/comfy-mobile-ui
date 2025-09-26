@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { ArrowLeft, Video, Download, X, AlertTriangle, CheckCircle, Loader2, Pla
 import { toast } from 'sonner';
 import { useConnectionStore } from '@/ui/store/connectionStore';
 import ComfyUIService from '@/infrastructure/api/ComfyApiClient';
+import type { LogEntry, LogsWsMessage } from '@/core/domain';
 
 interface VideoDownloadStatus {
   yt_dlp_available: boolean;
@@ -47,12 +48,48 @@ const VideoDownloader: React.FC = () => {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
 
+  // Log tracking
+  const [logMessages, setLogMessages] = useState<LogEntry[]>([]);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  const [isDownloadActive, setIsDownloadActive] = useState(false);
+
   const hasServerRequirements = isConnected && hasExtension;
 
   const handleBack = () => {
     sessionStorage.setItem('app-navigation', 'true');
     navigate('/', { replace: true });
   };
+
+  // Listen to log events
+  useEffect(() => {
+    const handleLogsMessage = (event: any) => {
+      // Only process logs when download is active
+      if (!isDownloadActive) {
+        return;
+      }
+
+      const logsData: LogsWsMessage = event.data || event;
+
+      if (logsData.entries && logsData.entries.length > 0) {
+        setLogMessages(prev => [...prev, ...logsData.entries]);
+
+        // Auto-scroll to bottom
+        setTimeout(() => {
+          if (logContainerRef.current) {
+            logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+          }
+        }, 10);
+      }
+    };
+
+    // Listen to logs WebSocket event (already subscribed globally)
+    ComfyUIService.on('logs', handleLogsMessage);
+
+    return () => {
+      // Remove event listener on unmount
+      ComfyUIService.off('logs', handleLogsMessage);
+    };
+  }, [isDownloadActive]);
 
   // Load video download status
   const loadDownloadStatus = async () => {
@@ -89,6 +126,16 @@ const VideoDownloader: React.FC = () => {
     }
 
     setIsDownloading(true);
+    setIsDownloadActive(true);
+    setLogMessages([]); // Clear previous logs
+
+    // Subscribe to logs before starting download (safe to call multiple times)
+    try {
+      await ComfyUIService.subscribeToLogsManually();
+    } catch (error) {
+      console.error('[VideoDownloader] Failed to subscribe to logs:', error);
+    }
+
     try {
       const requestParams: any = {
         url: videoUrl.trim()
@@ -111,17 +158,24 @@ const VideoDownloader: React.FC = () => {
             : response.message
         });
 
-        // Reset form
-        setVideoUrl('');
-        setCustomFilename('');
-        setSubfolder('');
+        // Reset form after a delay
+        setTimeout(() => {
+          setVideoUrl('');
+          setCustomFilename('');
+          setSubfolder('');
+          setIsDownloadActive(false);
+          // Keep logs visible for a bit
+          setTimeout(() => setLogMessages([]), 3000);
+        }, 2000);
       } else {
+        setIsDownloadActive(false);
         toast.error('Failed to download video', {
           description: response.error || response.message
         });
       }
     } catch (error) {
       console.error('Error downloading video:', error);
+      setIsDownloadActive(false);
       toast.error('Failed to download video', {
         description: 'Network error or server unavailable'
       });
@@ -458,6 +512,44 @@ const VideoDownloader: React.FC = () => {
                     </>
                   )}
                 </Button>
+
+                {/* Log Display - Only shown when download is active or has logs */}
+                {(isDownloadActive || logMessages.length > 0) && (
+                  <Card className="border border-slate-200/50 dark:border-slate-700/50 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2 text-sm">
+                        <Video className="h-4 w-4 text-blue-500" />
+                        <span>Download Progress</span>
+                        {isDownloading && (
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-500 ml-auto" />
+                        )}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div
+                        ref={logContainerRef}
+                        className="max-h-64 overflow-y-auto bg-slate-50 dark:bg-slate-800/50 rounded-md p-3"
+                      >
+                        {logMessages.length === 0 ? (
+                          <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                            Waiting for download logs...
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5">
+                            {logMessages.map((log, index) => (
+                              <div
+                                key={index}
+                                className="text-xs font-mono text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-all"
+                              >
+                                {log.m}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </CardContent>
             </Card>
           </>

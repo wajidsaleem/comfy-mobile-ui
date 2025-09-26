@@ -157,6 +157,7 @@ def setup_routes():
                 # Video download routes
                 app.router.add_post('/comfymobile/api/videos/download', download_youtube_video)
                 app.router.add_get('/comfymobile/api/videos/download/status', get_video_download_status)
+                app.router.add_post('/comfymobile/api/logs/subscribe', subscribe_to_logs)
                 app.router.add_post('/comfymobile/api/videos/upgrade-yt-dlp', upgrade_yt_dlp)
 
                 print("✅ ComfyMobileUI API routes registered successfully")

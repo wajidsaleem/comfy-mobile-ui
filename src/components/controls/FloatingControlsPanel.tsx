@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, Clock, Search, Maximize2, Move, RefreshCw } from 'lucide-react';
+import { Settings, Clock, Search, Maximize2, Move, RefreshCw, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePromptHistoryStore } from '@/ui/store/promptHistoryStore';
@@ -7,6 +7,8 @@ import { useConnectionStore } from '@/ui/store/connectionStore';
 import { globalWebSocketService } from '@/infrastructure/websocket/GlobalWebSocketService';
 import TriggerWordSelector from './TriggerWordSelector';
 import { SettingsDropdown } from './SettingsDropdown';
+import ComfyUIService from '@/infrastructure/api/ComfyApiClient';
+import type { LogEntry, LogsWsMessage } from '@/core/domain';
 
 
 interface SearchableNode {
@@ -75,10 +77,14 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
   const [searchResults, setSearchResults] = useState<SearchableNode[]>([]);
   const [selectedResultIndex, setSelectedResultIndex] = useState(-1);
   const [isTriggerWordSelectorOpen, setIsTriggerWordSelectorOpen] = useState(false);
+  const [isConsoleOpen, setIsConsoleOpen] = useState(false);
+  const [consoleLogs, setConsoleLogs] = useState<LogEntry[]>([]);
   const settingsRef = useRef<HTMLDivElement>(null);
   const settingsDropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const consoleRef = useRef<HTMLDivElement>(null);
+  const consoleContainerRef = useRef<HTMLDivElement>(null);
   const { openPromptHistory } = usePromptHistoryStore();
   const { url: serverUrl } = useConnectionStore();
 
@@ -241,9 +247,18 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
         setSearchResults([]);
         setSelectedResultIndex(-1);
       }
+
+      // For console, check both the console button and the console panel
+      const isOutsideConsoleButton = consoleRef.current && !consoleRef.current.contains(target);
+      const consolePanel = document.querySelector('[data-console-panel]');
+      const isOutsideConsolePanel = consolePanel && !consolePanel.contains(target);
+
+      if (isOutsideConsoleButton && isOutsideConsolePanel) {
+        setIsConsoleOpen(false);
+      }
     };
 
-    if (isSettingsOpen || isSearchOpen) {
+    if (isSettingsOpen || isSearchOpen || isConsoleOpen) {
       // Add both mouse and touch event listeners for better mobile support
       document.addEventListener('mousedown', handleOutsideInteraction);
       document.addEventListener('touchstart', handleOutsideInteraction);
@@ -253,7 +268,7 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
         document.removeEventListener('touchstart', handleOutsideInteraction);
       };
     }
-  }, [isSettingsOpen, isSearchOpen]);
+  }, [isSettingsOpen, isSearchOpen, isConsoleOpen]);
 
   // Focus search input when search opens
   useEffect(() => {
@@ -261,6 +276,67 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
       searchInputRef.current.focus();
     }
   }, [isSearchOpen]);
+
+  // Handle console toggle and log subscription
+  const handleConsoleToggle = async () => {
+    const newIsOpen = !isConsoleOpen;
+    setIsConsoleOpen(newIsOpen);
+
+    if (newIsOpen) {
+      // Close search when opening console
+      setIsSearchOpen(false);
+      setSearchValue('');
+      setSearchResults([]);
+      setSelectedResultIndex(-1);
+
+      // Subscribe to logs and fetch initial logs
+      try {
+        // Subscribe to logs
+        await ComfyUIService.subscribeToLogsManually();
+
+        // Fetch initial logs
+        const rawLogs = await ComfyUIService.getRawLogs();
+        if (rawLogs.entries && rawLogs.entries.length > 0) {
+          setConsoleLogs(rawLogs.entries);
+        }
+
+        // Auto-scroll to bottom after loading
+        setTimeout(() => {
+          if (consoleContainerRef.current) {
+            consoleContainerRef.current.scrollTop = consoleContainerRef.current.scrollHeight;
+          }
+        }, 100);
+      } catch (error) {
+        console.error('[FloatingControlsPanel] Failed to load console logs:', error);
+      }
+    }
+  };
+
+  // Listen to real-time log events
+  useEffect(() => {
+    if (!isConsoleOpen) return;
+
+    const handleLogsMessage = (event: any) => {
+      const logsData: LogsWsMessage = event.data || event;
+
+      if (logsData.entries && logsData.entries.length > 0) {
+        setConsoleLogs(prev => [...prev, ...logsData.entries]);
+
+        // Auto-scroll to bottom
+        setTimeout(() => {
+          if (consoleContainerRef.current) {
+            consoleContainerRef.current.scrollTop = consoleContainerRef.current.scrollHeight;
+          }
+        }, 10);
+      }
+    };
+
+    ComfyUIService.on('logs', handleLogsMessage);
+
+    return () => {
+      ComfyUIService.off('logs', handleLogsMessage);
+    };
+  }, [isConsoleOpen]);
 
   const handleClearVRAM = async () => {
     setIsClearingVRAM(true);
@@ -340,6 +416,10 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
       setSearchValue('');
       setSearchResults([]);
       setSelectedResultIndex(-1);
+    }
+    // Close console when opening search
+    if (!isSearchOpen) {
+      setIsConsoleOpen(false);
     }
   };
 
@@ -509,10 +589,29 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
           {/* Divider */}
           <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
 
+          {/* Console Button */}
+          <div className="relative" ref={consoleRef}>
+            <Button
+              onClick={handleConsoleToggle}
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 hover:bg-white/60 dark:hover:bg-slate-700/60"
+              title="Console"
+            >
+              <Terminal className="h-4 w-4" />
+            </Button>
+          </div>
+
           {/* Settings Button with Dropdown */}
           <div className="relative" ref={settingsRef}>
             <Button
-              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              onClick={() => {
+                setIsSettingsOpen(!isSettingsOpen);
+                // Close console when opening settings
+                if (!isSettingsOpen) {
+                  setIsConsoleOpen(false);
+                }
+              }}
               variant="ghost"
               size="sm"
               className="relative h-8 w-8 p-0 hover:bg-white/60 dark:hover:bg-slate-700/60"
@@ -663,6 +762,87 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
         onClose={() => setIsTriggerWordSelectorOpen(false)}
         serverUrl={serverUrl || 'http://localhost:8188'}
       />
+
+      {/* Console Panel - Independent container below main controls */}
+      <AnimatePresence>
+        {isConsoleOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="absolute top-full mt-2 right-0 w-96 bg-white/20 dark:bg-slate-800/20 backdrop-blur-xl rounded-xl shadow-2xl shadow-slate-900/10 dark:shadow-slate-900/25 border border-white/20 dark:border-slate-600/20 p-3 z-50"
+            data-console-panel
+            style={{
+              touchAction: 'pan-y pinch-zoom',
+              overscrollBehaviorY: 'contain'
+            } as React.CSSProperties}
+            onTouchStart={(e) => {
+              e.stopPropagation();
+            }}
+            onTouchMove={(e) => {
+              e.stopPropagation();
+            }}
+            onWheel={(e) => {
+              e.stopPropagation();
+            }}
+          >
+            {/* Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-slate-900/10 pointer-events-none rounded-xl" />
+
+            <div className="relative z-10">
+              {/* Console Header */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Server Console
+                </div>
+                <Button
+                  onClick={() => setConsoleLogs([])}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs hover:bg-white/60 dark:hover:bg-slate-700/60"
+                >
+                  Clear
+                </Button>
+              </div>
+
+              {/* Console Logs */}
+              <div
+                ref={consoleContainerRef}
+                className="h-96 overflow-y-auto space-y-1 px-3 py-2 bg-slate-900/90 dark:bg-slate-950/90 rounded-lg font-mono text-xs"
+                style={{
+                  touchAction: 'pan-y pinch-zoom',
+                  overscrollBehaviorY: 'contain'
+                } as React.CSSProperties}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                }}
+                onTouchMove={(e) => {
+                  e.stopPropagation();
+                }}
+                onWheel={(e) => {
+                  e.stopPropagation();
+                }}
+              >
+                {consoleLogs.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400">
+                    No logs available
+                  </div>
+                ) : (
+                  consoleLogs.map((log, index) => (
+                    <div
+                      key={index}
+                      className="py-0.5 text-slate-100 dark:text-slate-200 leading-relaxed break-all whitespace-pre-wrap"
+                    >
+                      {log.m}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

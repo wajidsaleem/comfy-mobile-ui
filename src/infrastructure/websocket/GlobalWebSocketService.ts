@@ -375,13 +375,13 @@ class GlobalWebSocketService extends EventEmitter {
         if (typeof event.data === 'string') {
           // Text message - parse as JSON
           const message: WebSocketMessage = JSON.parse(event.data);
-          
+
           // Update last message time for all messages to keep connection alive
           this.updateState({ lastMessageTime: Date.now() });
-          
+
           // 🎯 WebSocket message reception logging
           if (message.type !== 'crystools.monitor') {
-            console.log(`📨 [GlobalWebSocketService] Message received:`, {
+            console.log(`[GlobalWebSocketService] Message received:`, {
               type: message.type,
               timestamp: new Date().toISOString(),
               hasData: !!message.data,
@@ -504,23 +504,23 @@ class GlobalWebSocketService extends EventEmitter {
    * Disconnect WebSocket
    */
   disconnect(): void {
-    
+
     // Clear timers
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    
+
     // Keep rolling buffer on disconnect for navigation scenarios
-    
+
     // No heartbeat to stop
-    
+
     // Close connection
     if (this.webSocket) {
       this.webSocket.close(1000, 'Manual disconnect');
       this.webSocket = null;
     }
-    
+
     this.updateState({
       isConnected: false,
       isConnecting: false,
@@ -690,21 +690,21 @@ class GlobalWebSocketService extends EventEmitter {
    */
   private handleComfyUIMessage(message: WebSocketMessage): void {
     const { type, data } = message;
-    
+
     if (type !== 'crystools.monitor') {
       console.log(`📨 [GlobalWebSocketService] Emitting raw ComfyUI message:`, { type, data });
     }
-    
+
     // 🎯 Add to persistent execution state buffer
     this.addToExecutionStateBuffer(type, data);
-    
+
     // ✅ Emit raw ComfyUI message unchanged
     this.emit(type, {
       type: type,
       data: data,
       timestamp: Date.now()
     });
-    
+
     // Keep minimal state tracking for compatibility only
     switch (type) {
       case 'executing':
@@ -724,14 +724,14 @@ class GlobalWebSocketService extends EventEmitter {
           }
         }
         break;
-        
+
       case 'execution_error':
       case 'execution_interrupted':
       case 'execution_success':
         // Reset processing state on any completion/error
         this.setProcessingState(false);
         break;
-        
+
       // No other transformations - just emit raw messages
     }
   }
