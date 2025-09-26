@@ -13,6 +13,7 @@ import ModelBrowserPage from '@/components/models/ModelBrowserPage';
 import BrowserDataBackup from '@/components/etc/BrowserDataBackup';
 import ApiKeyManagement from '@/components/settings/ApiKeyManagement';
 import { CustomTypeManager } from '@/components/etc/CustomTypeManager';
+import VideoDownloader from '@/components/videos/VideoDownloader';
 import { Toaster } from '@/components/ui/sonner';
 import { useConnectionStore } from '@/ui/store/connectionStore';
 import { globalWebSocketService } from '@/infrastructure/websocket/GlobalWebSocketService';
@@ -200,6 +201,7 @@ const AppRouter: React.FC = () => {
         <Route path="/browser-data-backup" element={<BrowserDataBackup />} />
         <Route path="/settings/api-keys" element={<ApiKeyManagement />} />
         <Route path="/settings/widget-types" element={<CustomTypeManager />} />
+        <Route path="/videos/download" element={<VideoDownloader />} />
       </Routes>
       <Toaster 
         position="bottom-center"

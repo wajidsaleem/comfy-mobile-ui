@@ -28,6 +28,7 @@ try:
     from .handlers.widget_handler import *
     from .handlers.node_mapping_handler import *
     from .handlers.manager_handler import *
+    from .handlers.video_download_handler import *
 except ImportError as e:
     print(f"Warning: Could not import handlers: {e}")
     # Fallback imports (for development/testing)
@@ -42,6 +43,7 @@ except ImportError as e:
     from handlers.widget_handler import *
     from handlers.node_mapping_handler import *
     from handlers.manager_handler import *
+    from handlers.video_download_handler import *
 
 def get_routes():
     """Get routes from ComfyUI server module"""
@@ -151,7 +153,12 @@ def setup_routes():
                 # Manager proxy routes
                 app.router.add_get('/comfymobile/api/manager/queue/start', manager_queue_start)
                 app.router.add_post('/comfymobile/api/manager/queue/install', manager_queue_install)
-                
+
+                # Video download routes
+                app.router.add_post('/comfymobile/api/videos/download', download_youtube_video)
+                app.router.add_get('/comfymobile/api/videos/download/status', get_video_download_status)
+                app.router.add_post('/comfymobile/api/videos/upgrade-yt-dlp', upgrade_yt_dlp)
+
                 print("✅ ComfyMobileUI API routes registered successfully")
                 print("📋 Modular handlers loaded:")
                 print("   🗂️  System Handler - status, reboot")
@@ -164,6 +171,7 @@ def setup_routes():
                 print("   💾  Backup Handler - browser data backup/restore")
                 print("   🧩  Widget Handler - custom widget type management")
                 print("   🔗  Node Mapping Handler - node input mappings")
+                print("   🎥  Video Download Handler - YouTube video downloads")
                 return True
         
         # Method 2: Try direct routes access (older versions)

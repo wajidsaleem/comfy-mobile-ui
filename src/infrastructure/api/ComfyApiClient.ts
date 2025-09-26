@@ -1474,6 +1474,56 @@ const rebootServer = async (): Promise<boolean> => {
   return false;
 };
 
+// Video download management APIs
+const getVideoDownloadStatus = async (): Promise<any> => {
+  initializeService();
+  try {
+    const response = await axios.get(`${serverUrl}/comfymobile/api/videos/download/status`, {
+      timeout: 10000
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('Failed to get video download status:', error);
+    throw error;
+  }
+};
+
+const downloadVideo = async (params: {
+  url: string;
+  filename?: string;
+  subfolder?: string;
+}): Promise<any> => {
+  initializeService();
+  try {
+    const response = await axios.post(`${serverUrl}/comfymobile/api/videos/download`, params, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 300000 // 5 minutes for video downloads
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('Failed to download video:', error);
+    throw error;
+  }
+};
+
+const upgradeYtDlp = async (): Promise<any> => {
+  initializeService();
+  try {
+    const response = await axios.post(`${serverUrl}/comfymobile/api/videos/upgrade-yt-dlp`, {}, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 120000 // 2 minutes for upgrade
+    });
+    return response.data;
+  } catch (error: any) {
+    console.error('Failed to upgrade yt-dlp:', error);
+    throw error;
+  }
+};
+
 /**
  * ComfyUI Service - Pure HTTP API Client
  * 
@@ -1572,6 +1622,11 @@ const ComfyUIService = {
   renameModelFile,
   getTriggerWords,
   saveTriggerWords,
+
+  // Video download APIs
+  getVideoDownloadStatus,
+  downloadVideo,
+  upgradeYtDlp,
   
   // Utility methods
   isInitialized: () => isInitialized,

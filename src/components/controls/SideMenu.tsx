@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { X, Settings, Wifi, WifiOff, Server, Download, Upload, RotateCcw, Package, Trash2, HardDrive, FolderOpen, Database, Layers } from 'lucide-react';
+import { X, Settings, Wifi, WifiOff, Server, Download, Upload, RotateCcw, Package, Trash2, HardDrive, FolderOpen, Database, Layers, Video } from 'lucide-react';
 import { useConnectionStore } from '@/ui/store/connectionStore';
 import { CacheService, CacheClearResult, BrowserCapabilities } from '@/services/cacheService';
 
@@ -16,9 +16,10 @@ interface SideMenuProps {
   onModelBrowserClick: () => void;
   onBrowserDataBackupClick: () => void;
   onWidgetTypeSettingsClick: () => void;
+  onVideoDownloadClick: () => void;
 }
 
-const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose, onServerSettingsClick, onImportWorkflowsClick, onUploadWorkflowsClick, onServerRebootClick, onModelDownloadClick, onModelBrowserClick, onBrowserDataBackupClick, onWidgetTypeSettingsClick }) => {
+const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose, onServerSettingsClick, onImportWorkflowsClick, onUploadWorkflowsClick, onServerRebootClick, onModelDownloadClick, onModelBrowserClick, onBrowserDataBackupClick, onWidgetTypeSettingsClick, onVideoDownloadClick }) => {
   const { url, isConnected, error } = useConnectionStore();
   const [cacheSize, setCacheSize] = useState<number>(0);
   const [isClearing, setIsClearing] = useState<boolean>(false);
@@ -237,6 +238,24 @@ const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose, onServerSettingsCl
                 >
                   <FolderOpen className="h-4 w-4 mr-3" />
                   Model Browser
+                </Button>
+              </div>
+
+              {/* Separator */}
+              <div className="border-t border-white/20 dark:border-slate-600/20"></div>
+
+              {/* Helper Tools Group */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Helper Tools
+                </h4>
+                <Button
+                  onClick={onVideoDownloadClick}
+                  variant="outline"
+                  className="w-full justify-start bg-white/10 dark:bg-slate-700/10 backdrop-blur-sm border-white/20 dark:border-slate-600/20 text-slate-700 dark:text-slate-300 hover:bg-white/20 dark:hover:bg-slate-700/20 hover:border-white/30 dark:hover:border-slate-600/30"
+                >
+                  <Video className="h-4 w-4 mr-3" />
+                  Video Downloader
                 </Button>
               </div>
 

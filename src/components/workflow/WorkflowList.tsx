@@ -481,6 +481,12 @@ const WorkflowList: React.FC = () => {
     navigate('/settings/widget-types');
   };
 
+  const handleVideoDownloadClick = () => {
+    setIsSideMenuOpen(false);
+    sessionStorage.setItem('app-navigation', 'true');
+    navigate('/videos/download');
+  };
+
   const handleOutputsClick = () => {
     sessionStorage.setItem('app-navigation', 'true');
     navigate('/outputs');
@@ -814,6 +820,7 @@ const WorkflowList: React.FC = () => {
         onModelBrowserClick={handleModelBrowserClick}
         onBrowserDataBackupClick={handleBrowserDataBackupClick}
         onWidgetTypeSettingsClick={handleWidgetTypeSettingsClick}
+        onVideoDownloadClick={handleVideoDownloadClick}
       />
 
       {/* Workflow Edit Modal */}
