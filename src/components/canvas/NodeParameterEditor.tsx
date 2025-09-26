@@ -10,6 +10,7 @@ import { WidgetValueEditor } from '@/components/controls/WidgetValueEditor';
 import { VideoPreviewSection } from '@/components/media/VideoPreviewSection';
 import { InlineImagePreview } from '@/components/media/InlineImagePreview';
 import { PointEditor } from '@/components/controls/widgets/custom_node_widget/PointEditor';
+import { detectParameterTypeForGallery, getGalleryPermissions } from '@/shared/utils/GalleryPermissionUtils';
 
 interface NodeBounds {
   x: number;
@@ -114,47 +115,10 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
 
   // Helper function to detect IMAGE/VIDEO parameters (for Value area clicks)
   const detectParameterType = (param: IProcessedParameter): 'IMAGE' | 'VIDEO' | null => {
-    const name = param.name.toLowerCase();
-    const possibleValues = param.possibleValues || [];
     const currentValue = getWidgetValue(nodeId, param.name, param.value);
+    const possibleValues = param.possibleValues || [];
 
-    // Exclude model/config parameter names that are not actual image/video parameters
-    const excludedNames = ['clip_name', 'ckpt_name', 'model_name', 'lora_name', 'vae_name', 'upscale_model_name', 'controlnet_name'];
-    if (excludedNames.includes(name)) {
-      return null;
-    }
-
-    // First check current value - if it's a file with extension, use that
-    if (currentValue && typeof currentValue === 'string') {
-      if (currentValue.match(/\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i)) {
-        return 'IMAGE';
-      }
-      if (currentValue.match(/\.(mp4|webm|avi|mov|mkv|flv|wmv|mpg|mpeg)$/i)) {
-        return 'VIDEO';
-      }
-    }
-
-    // Check possible values for image extensions (more comprehensive)
-    const hasImageExtensions = possibleValues.some((value: any) => {
-      const str = String(value).toLowerCase();
-      return str.match(/\.(png|jpg|jpeg|gif|webp|bmp|svg)$/);
-    });
-
-    if (hasImageExtensions) {
-      return 'IMAGE';
-    }
-
-    // Check possible values for video extensions (more comprehensive)
-    const hasVideoExtensions = possibleValues.some((value: any) => {
-      const str = String(value).toLowerCase();
-      return str.match(/\.(mp4|webm|avi|mov|mkv|flv|wmv|mpg|mpeg)$/);
-    });
-
-    if (hasVideoExtensions) {
-      return 'VIDEO';
-    }
-
-    return null;
+    return detectParameterTypeForGallery(param.name, currentValue, possibleValues);
   };
 
 
@@ -1073,11 +1037,11 @@ export const NodeParameterEditor: React.FC<NodeParameterEditorProps> = ({
         <div className="fixed inset-0 z-[9999] bg-white dark:bg-slate-900 overflow-auto overscroll-contain">
           <OutputsGallery
             isFileSelectionMode={true}
-            allowImages={fileSelectionState.paramType === 'IMAGE'}
-            allowVideos={fileSelectionState.paramType === 'VIDEO'}
+            allowImages={true} // Always allow images
+            allowVideos={fileSelectionState.paramType === 'VIDEO'} // Allow videos if param type is VIDEO
             onFileSelect={handleFileSelect}
             onBackClick={() => setFileSelectionState({ isOpen: false, paramName: null, paramType: null })}
-            selectionTitle={`Select ${fileSelectionState.paramType === 'IMAGE' ? 'Image' : 'Video'} for ${fileSelectionState.paramName}`}
+            selectionTitle={`Select ${fileSelectionState.paramType === 'IMAGE' ? 'Image' : 'Image/Video'} for ${fileSelectionState.paramName}`}
           />
         </div>,
         document.body

@@ -306,8 +306,8 @@ export const useFileOperations = ({ onSetWidgetValue }: UseFileOperationsProps) 
             });
             
             const thumbnailFile = await extractVideoThumbnail(file, {
-              width: 320,
-              height: 240,
+              maxWidth: 800,
+              maxHeight: 600,
               format: 'png'
             });
             
@@ -482,8 +482,8 @@ export const useFileOperations = ({ onSetWidgetValue }: UseFileOperationsProps) 
             });
             
             const thumbnailFile = await extractVideoThumbnail(file, {
-              width: 320,
-              height: 240,
+              maxWidth: 800,
+              maxHeight: 600,
               format: 'png'
             });
             

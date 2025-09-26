@@ -11,6 +11,7 @@ import { IProcessedParameter } from '@/shared/types/comfy/IComfyObjectInfo';
 import { ComfyGraphNode } from '@/core/domain/ComfyGraphNode';
 import { IComfyWidget } from '@/shared/types/app/IComfyGraphNode';
 import { isImageFile, isVideoFile } from '@/shared/utils/ComfyFileUtils';
+import { getGalleryPermissions } from '@/shared/utils/GalleryPermissionUtils';
 import { InlineImagePreview } from '@/components/media/InlineImagePreview';
 import { InlineVideoPreview } from '@/components/media/InlineVideoPreview';
 import { OutputsGallery } from '@/components/media/OutputsGallery';
@@ -249,7 +250,6 @@ export const WidgetValueEditor: React.FC<WidgetValueEditorProps> = ({
                       <select
                         value={String(editingValue || '')}
                         onClick={() => {
-                          console.log('🔍 IMAGE/VIDEO select clicked, opening file gallery');
                           setShowAlbumModal(true);
                         }}
                         // Prevent actual selection since we're using the modal
@@ -577,8 +577,7 @@ export const WidgetValueEditor: React.FC<WidgetValueEditorProps> = ({
         >
           <OutputsGallery
             isFileSelectionMode={true}
-            allowImages={param.type === 'IMAGE' || isImageParam || (param.type !== 'VIDEO' && !isVideoParam && isImageFile(String(currentValue)))}
-            allowVideos={param.type === 'VIDEO' || isVideoParam || (param.type !== 'IMAGE' && !isImageParam && isVideoFile(String(currentValue)))}
+            {...getGalleryPermissions(param.name, currentValue, param.possibleValues)}
             onFileSelect={(filename) => {
               // For IMAGE/VIDEO types, directly update widget value without editing mode
               // Start editing mode, set value, and save immediately
