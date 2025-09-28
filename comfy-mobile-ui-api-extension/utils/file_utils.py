@@ -208,13 +208,13 @@ def ensure_proper_extension(filename: str, content_type: str = None, url: str = 
     Ensure filename has a proper extension based on content type, URL, or defaults
     """
     import os
-    
-    # Check if filename already has an extension
+
+    # Check if filename already has an extension-like pattern
     if filename and '.' in filename:
         name, ext = os.path.splitext(filename)
-        if ext.lower() in {'.safetensors', '.ckpt', '.pt', '.bin', '.pth', '.zip', '.tar', '.gz', 
-                          '.png', '.jpg', '.jpeg', '.webp', '.mp4', '.webm', '.txt', '.json'}:
-            return filename  # Already has a valid extension
+        # If extension exists and has no whitespace, consider it valid
+        if ext and not any(c.isspace() for c in ext):
+            return filename  # Already has a valid extension pattern
     
     # Try to detect extension from Content-Type
     if content_type:

@@ -503,11 +503,35 @@ async def perform_download(task_id):
             if os.path.exists(task["target_path"]):
                 os.remove(task["target_path"])  # Remove existing file if overwriting
             os.rename(temp_path, task["target_path"])
-            
+
             # Verify file size
             final_size = os.path.getsize(task["target_path"])
             print(f"✅ Download completed: {task['filename']} ({final_size:,} bytes)")
-        
+
+            # Check if file is a ZIP and extract it
+            if task["filename"].lower().endswith('.zip'):
+                try:
+                    print(f"📦 Extracting ZIP file: {task['filename']}")
+                    import zipfile
+
+                    # Get target directory (parent of the zip file)
+                    target_dir = os.path.dirname(task["target_path"])
+
+                    # Extract ZIP contents
+                    with zipfile.ZipFile(task["target_path"], 'r') as zip_ref:
+                        zip_ref.extractall(target_dir)
+
+                    print(f"✅ ZIP extraction completed: {task['filename']}")
+
+                    # Remove the ZIP file after successful extraction
+                    os.remove(task["target_path"])
+                    print(f"🗑️ Removed ZIP file: {task['filename']}")
+
+                except zipfile.BadZipFile:
+                    print(f"⚠️ File is not a valid ZIP archive: {task['filename']}")
+                except Exception as e:
+                    print(f"⚠️ Failed to extract ZIP file: {task['filename']} - {str(e)}")
+
         task["status"] = "completed"
         task["completed_at"] = time.time()
         task["progress"] = 100
