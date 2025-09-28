@@ -1320,21 +1320,22 @@ function preprocessVariablesAndSetNodes(workingGraph: any) {
 }
 
 /**
- * Step 5: Process GetNode connections
+ * Step 5: Process GetNode connections and SetNode output bypass
  */
 function resolveGetNodeConnections(workingGraph: any, variableStore: Record<string, any>) {
-  console.log('🔄 Step 5: Processing GetNode connections...');
-  
+  console.log('🔄 Step 5: Processing GetNode connections and SetNode output bypass...');
+
   const newLinks: Record<number, any> = { ...workingGraph._links };
   let nextLinkId = Math.max(...Object.keys(newLinks).map(Number)) + 1;
-  
+
+  // Process GetNode connections (variable references)
   for (const node of workingGraph._nodes as any[]) {
     if (node.type === 'GetNode' || node.type === 'easy getNode') {
-      const variableName = Array.isArray(node.widgets_values) && node.widgets_values[0] 
-        ? String(node.widgets_values[0]) 
+      const variableName = Array.isArray(node.widgets_values) && node.widgets_values[0]
+        ? String(node.widgets_values[0])
         : '';
       const variable = variableStore[variableName];
-      
+
       if (variable && variable.value) {
         for (const targetNode of workingGraph._nodes) {
           if (targetNode.inputs) {
@@ -1362,9 +1363,65 @@ function resolveGetNodeConnections(workingGraph: any, variableStore: Record<stri
       }
     }
   }
-  
+
+  // Process SetNode output bypass (direct passthrough connections)
+  for (const node of workingGraph._nodes as any[]) {
+    if (node.type === 'SetNode' || node.type === 'easy setNode') {
+      if (!node.inputs || node.inputs.length === 0) {
+        continue;
+      }
+
+      const setNodeInput = node.inputs[0];
+      if (setNodeInput.link === null || setNodeInput.link === undefined) {
+        continue;
+      }
+
+      const inputLink = newLinks[setNodeInput.link];
+      if (!inputLink) {
+        continue;
+      }
+
+      const sourceNodeId = inputLink.origin_id;
+      const sourceSlot = inputLink.origin_slot;
+
+      const sourceNode = workingGraph._nodes.find((n: any) => n.id === sourceNodeId);
+      if (!sourceNode || !sourceNode.outputs || !sourceNode.outputs[sourceSlot]) {
+        continue;
+      }
+
+      const sourceOutput = sourceNode.outputs[sourceSlot];
+
+      if (!node.outputs || node.outputs.length === 0) {
+        continue;
+      }
+
+      for (const output of node.outputs) {
+        if (!output.links || output.links.length === 0) {
+          continue;
+        }
+
+        for (const outputLinkId of output.links) {
+          const outputLink = newLinks[outputLinkId];
+          if (!outputLink) {
+            continue;
+          }
+
+          outputLink.origin_id = sourceNodeId;
+          outputLink.origin_slot = sourceSlot;
+
+          if (sourceOutput.links && Array.isArray(sourceOutput.links)) {
+            if (!sourceOutput.links.includes(outputLinkId)) {
+              sourceOutput.links.push(outputLinkId);
+            }
+          } else {
+            sourceOutput.links = [outputLinkId];
+          }
+        }
+      }
+    }
+  }
+
   workingGraph._links = newLinks;
-  console.log(`✅ GetNode processing complete: ${Object.keys(workingGraph._links).length} total links`);
   return workingGraph;
 }
 
