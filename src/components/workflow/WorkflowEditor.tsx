@@ -2153,7 +2153,15 @@ const WorkflowEditor: React.FC = () => {
         hasUnsavedChanges={widgetEditor.hasModifications()}
         isSaving={isSaving}
         saveSucceeded={saveSucceeded}
-        onNavigateBack={() => navigate('/')}
+        onNavigateBack={() => {
+          // If NodeInspector or GroupInspector is open, close it first
+          if (isNodePanelVisible) {
+            setIsNodePanelVisible(false);
+            setSelectedNode(null);
+          } else {
+            navigate('/');
+          }
+        }}
         onSaveChanges={handleSaveChanges}
       />
       
