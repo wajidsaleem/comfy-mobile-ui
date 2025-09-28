@@ -39,7 +39,6 @@ async def get_all_widget_types(request):
                         print(f"Error reading widget type file {file}: {e}")
                         continue
         
-        print(f"DEBUG: Sending widget_types to client: {widget_types}")
         return web.json_response({
             'success': True,
             'widgetTypes': widget_types,
