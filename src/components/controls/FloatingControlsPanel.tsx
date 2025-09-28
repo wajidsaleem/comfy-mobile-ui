@@ -602,6 +602,9 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
             </Button>
           </div>
 
+          {/* Divider */}
+          <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1" />
+
           {/* Settings Button with Dropdown */}
           <div className="relative" ref={settingsRef}>
             <Button
