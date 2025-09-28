@@ -15,6 +15,8 @@ export const VIRTUAL_NODES: ReadonlyArray<string> = [
     'Reroute',        // Connection routing helper nodes
     'GetNode',        // Variable getter nodes (workflow-only)
     'SetNode',        // Variable setter nodes (workflow-only)
+    'easy setNode',   // Variable setter nodes (workflow-only)
+    'easy getNode',   // Variable getter nodes (workflow-only)
     'PrimitiveNode',  // Primitive value nodes (often workflow-only)
     
     // rgthree extension nodes (workflow management)
@@ -49,7 +51,9 @@ export const API_VIRTUAL_NODES = new Set([
   'Reroute', 
   'PrimitiveNode',
   'SetNode',
-  'GetNode'
+  'GetNode',
+  'easy setNode',
+  'easy getNode'
 ]);
 
 /**

@@ -985,7 +985,7 @@ export const convertGraphToAPI_old = (graph: any): { apiWorkflow: any; nodeCount
     const nodeId = String(node.id);
     const nodeType = node.type;
     
-    if (nodeType === 'SetNode') {
+    if (nodeType === 'SetNode' || nodeType === 'easy setNode') {
       // Extract variable name from widgets_values[0]
       const variableName = node.widgets_values && node.widgets_values[0] ? String(node.widgets_values[0]) : '';
       
@@ -1024,7 +1024,7 @@ export const convertGraphToAPI_old = (graph: any): { apiWorkflow: any; nodeCount
   let nextLinkId = Math.max(...Object.keys(newLinks).map(Number)) + 1;
 
   for (const node of workingGraph._nodes as any[]) {
-    if (node.type === 'GetNode') {
+    if (node.type === 'GetNode' || node.type === 'easy getNode') {
       // Get variable name from GetNode
       const variableName = node.widgets_values && node.widgets_values[0] ? String(node.widgets_values[0]) : '';
       const variable = variableStore[variableName];
@@ -1283,7 +1283,7 @@ function preprocessVariablesAndSetNodes(workingGraph: any) {
     const nodeId = String(node.id);
     const nodeType = node.type;
     
-    if (nodeType === 'SetNode') {
+    if (nodeType === 'SetNode' || nodeType === 'easy setNode') {
       // Extract variable name from widgets_values[0]
       const variableName = node.widgets_values && node.widgets_values[0] ? String(node.widgets_values[0]) : '';
       
@@ -1329,7 +1329,7 @@ function resolveGetNodeConnections(workingGraph: any, variableStore: Record<stri
   let nextLinkId = Math.max(...Object.keys(newLinks).map(Number)) + 1;
   
   for (const node of workingGraph._nodes as any[]) {
-    if (node.type === 'GetNode') {
+    if (node.type === 'GetNode' || node.type === 'easy getNode') {
       const variableName = Array.isArray(node.widgets_values) && node.widgets_values[0] 
         ? String(node.widgets_values[0]) 
         : '';
@@ -1646,7 +1646,9 @@ function isVirtualNode(node: any): boolean {
     'Reroute',
     'PrimitiveNode',
     'SetNode',
+    'easy setNode',
     'GetNode',
+    'easy getNode',
     // rgthree extension nodes
     'Fast Groups Bypasser (rgthree)',
     'Fast Groups Muter (rgthree)',

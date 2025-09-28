@@ -359,7 +359,7 @@ export class SetGetNodeProcessor {
   
   // Process SetNode - register variable
   processSetNode(nodeId: string, node: ExecutableComfyNode): void {
-    if (node.comfyClass !== 'SetNode') return
+    if (node.comfyClass !== 'SetNode' && node.comfyClass !== 'easy setNode') return
     
     const variableName = this.getSetNodeVariableName(node)
     const dataType = this.getSetNodeDataType(node)
@@ -374,7 +374,7 @@ export class SetGetNodeProcessor {
   
   // Process GetNode - resolve variable reference
   processGetNode(nodeId: string, node: ExecutableComfyNode): any {
-    if (node.comfyClass !== 'GetNode') return null
+    if (node.comfyClass !== 'GetNode' && node.comfyClass !== 'easy getNode') return null
     
     const variableName = this.getGetNodeVariableName(node)
     const variable = this.variables[variableName]
@@ -418,7 +418,7 @@ export class SetGetNodeProcessor {
           
           // Check if source is GetNode
           const sourceNode = apiWorkflow[sourceNodeId]
-          if ((sourceNode as any)?.class_type === 'GetNode') {
+          if ((sourceNode as any)?.class_type === 'GetNode' || (sourceNode as any)?.class_type === 'easy getNode') {
             // Find GetNode's variable name
             const variableName = (sourceNode as any).inputs.param_0 as string
             const variable = this.variables[variableName]
@@ -434,7 +434,7 @@ export class SetGetNodeProcessor {
     
     // Step 2: Remove SetNode and GetNode from API completely
     for (const [nodeId, nodeData] of Object.entries(apiWorkflow)) {
-      if ((nodeData as any).class_type === 'SetNode' || (nodeData as any).class_type === 'GetNode') {
+      if ((nodeData as any).class_type === 'SetNode' || (nodeData as any).class_type === 'GetNode' || (nodeData as any).class_type === 'easy setNode' || (nodeData as any).class_type === 'easy getNode') {
         delete apiWorkflow[nodeId]
       }
     }
