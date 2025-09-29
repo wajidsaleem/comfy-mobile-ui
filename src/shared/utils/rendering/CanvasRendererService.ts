@@ -5,9 +5,144 @@ import type { IComfyGraphNode, IComfyGraphLink } from '@/shared/types/app/base';
 import { DEFAULT_CANVAS_CONFIG, CanvasConfig } from '@/config/canvasConfig';
 import { IComfyGraphGroup } from '@/shared/types/app/base';
 import { ComfyGraphNode } from '@/core/domain/ComfyGraphNode';
+import { useConnectionStore } from '@/ui/store/connectionStore';
 
 // Alias for backward compatibility
 type IGroup = IComfyGraphGroup;
+
+// Image cache for preview images
+const imageCache = new Map<string, HTMLImageElement>();
+const imageLoadingPromises = new Map<string, Promise<HTMLImageElement>>();
+// Track which nodes have already initiated image loading
+const nodeImageLoadingInitiated = new Set<number>();
+// Track which images belong to which nodes
+const nodeImageMap = new Map<number, Set<string>>();
+
+/**
+ * Clear node image loading tracking (called when workflow changes)
+ */
+export function clearNodeImageLoadingCache() {
+  nodeImageLoadingInitiated.clear();
+  nodeImageMap.clear();
+}
+
+/**
+ * Clear image cache for specific node widgets (called when NodeInspector closes)
+ */
+export function clearNodeImageCache(nodeId?: number) {
+  if (nodeId !== undefined) {
+    // Clear loading tracking for specific node
+    nodeImageLoadingInitiated.delete(nodeId);
+
+    // Clear cached images for this specific node only
+    const nodeImages = nodeImageMap.get(nodeId);
+    if (nodeImages) {
+      nodeImages.forEach(filename => {
+        imageCache.delete(filename);
+        imageLoadingPromises.delete(filename);
+      });
+      nodeImageMap.delete(nodeId);
+    }
+  } else {
+    // Clear all caches
+    nodeImageLoadingInitiated.clear();
+    imageCache.clear();
+    imageLoadingPromises.clear();
+    nodeImageMap.clear();
+  }
+}
+
+/**
+ * Check if a filename is a video file
+ */
+function isVideoFile(filename: string): boolean {
+  const videoExtensions = ['.mp4', '.webm', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.mpg', '.mpeg'];
+  const lowerFilename = filename.toLowerCase();
+  return videoExtensions.some(ext => lowerFilename.endsWith(ext));
+}
+
+/**
+ * Convert video filename to thumbnail PNG filename
+ */
+function getVideoThumbnailFilename(videoFilename: string): string {
+  // Remove video extension and add .png
+  const lastDotIndex = videoFilename.lastIndexOf('.');
+  if (lastDotIndex > 0) {
+    return videoFilename.substring(0, lastDotIndex) + '.png';
+  }
+  return videoFilename + '.png';
+}
+
+/**
+ * Load an image from ComfyUI server
+ */
+async function loadComfyImage(filename: string, nodeId?: number): Promise<HTMLImageElement> {
+  // Get server URL from connectionStore
+  const serverUrl = useConnectionStore.getState().url || 'http://localhost:8188';
+
+  // For video files, load the PNG thumbnail instead
+  let targetFilename = filename;
+  if (isVideoFile(filename)) {
+    targetFilename = getVideoThumbnailFilename(filename);
+    console.log(`🎬 [Canvas] Loading thumbnail for video: ${filename} -> ${targetFilename}`);
+  }
+
+  // Check cache first (use original filename as cache key for consistency)
+  if (imageCache.has(filename)) {
+    return imageCache.get(filename)!;
+  }
+
+  // Check if already loading
+  if (imageLoadingPromises.has(filename)) {
+    return imageLoadingPromises.get(filename)!;
+  }
+
+  // Create loading promise
+  const loadPromise = new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+
+    // Parse filename and subfolder
+    let actualFilename: string;
+    let subfolder: string = '';
+
+    if (targetFilename.includes('/')) {
+      const lastSlashIndex = targetFilename.lastIndexOf('/');
+      subfolder = targetFilename.substring(0, lastSlashIndex);
+      actualFilename = targetFilename.substring(lastSlashIndex + 1);
+    } else {
+      actualFilename = targetFilename;
+    }
+
+    // Build URL for ComfyUI file view
+    const url = `${serverUrl}/view?filename=${encodeURIComponent(actualFilename)}&type=input${subfolder ? `&subfolder=${encodeURIComponent(subfolder)}` : ''}`;
+
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      imageCache.set(filename, img);  // Use original filename as key
+      imageLoadingPromises.delete(filename);
+
+      // Track which node this image belongs to
+      if (nodeId !== undefined) {
+        if (!nodeImageMap.has(nodeId)) {
+          nodeImageMap.set(nodeId, new Set());
+        }
+        nodeImageMap.get(nodeId)!.add(filename);
+      }
+
+      resolve(img);
+    };
+
+    img.onerror = () => {
+      imageLoadingPromises.delete(filename);
+      reject(new Error(`Failed to load image: ${targetFilename}`));
+    };
+
+    img.src = url;
+  });
+
+  imageLoadingPromises.set(filename, loadPromise);
+  return loadPromise;
+}
 
 // Note: ComfyGraphNode can have Float32Array for pos and size when using LiteGraph
 // The rendering functions handle both Float32Array and regular arrays
@@ -56,6 +191,7 @@ export interface RenderingOptions {
   showText?: boolean; // Whether to render node titles and text (default: true)
   viewportScale?: number; // Viewport scale for responsive font sizing
   modifiedNodeIds?: Set<number>; // Nodes with temporary widget changes
+  modifiedWidgetValues?: Map<number, Record<string, any>>; // Actual modified widget values
   repositionMode?: {
     isActive: boolean;
     selectedNodeId: number | null;
@@ -559,7 +695,7 @@ export function renderNodes(
   config: CanvasConfig = DEFAULT_CANVAS_CONFIG,
   options: RenderingOptions = {}
 ): void {
-  const { selectedNode, executingNodeId, errorNodeId, nodeExecutionProgress, showText = true, viewportScale, modifiedNodeIds, repositionMode, connectionMode, missingNodeIds, longPressState } = options;
+  const { selectedNode, executingNodeId, errorNodeId, nodeExecutionProgress, showText = true, viewportScale, modifiedNodeIds, modifiedWidgetValues, repositionMode, connectionMode, missingNodeIds, longPressState } = options;
 
   // Sort nodes by collapsed state first, then connection mode priority, then by order
   // Lower values are drawn first (behind), higher values are drawn last (in front)
@@ -875,8 +1011,52 @@ export function renderNodes(
             const widgetHeight = 24;
             const widgetSpacing = 4;
             const widgetLineHeight = widgetHeight + widgetSpacing;
+
+            // First, collect IMAGE/VIDEO widgets and initiate loading
+            const imageWidgets: { widget: any; value: string }[] = [];
+            const shouldInitiateLoading = !nodeImageLoadingInitiated.has(node.id);
+            if (shouldInitiateLoading) {
+              nodeImageLoadingInitiated.add(node.id);
+            }
+
+            for (const widget of widgets) {
+              const name = (widget.name || '').toLowerCase();
+              // Check modifiedWidgetValues first, then fall back to widget.value
+              const modifiedValues = modifiedWidgetValues?.get(node.id);
+              const value = modifiedValues?.[widget.name] !== undefined ? modifiedValues[widget.name] : widget.value;
+
+              // Check if it's an IMAGE or VIDEO widget
+              if ((name.includes('image') || name.includes('img') || name.includes('video') ||
+                  name === 'filename' || name === 'file' || name === 'input') &&
+                  value && typeof value === 'string' &&
+                  (value.includes('.') || value.includes('/'))) {
+                imageWidgets.push({ widget, value });
+
+                // Track this image for the node
+                if (!nodeImageMap.has(node.id)) {
+                  nodeImageMap.set(node.id, new Set());
+                }
+                nodeImageMap.get(node.id)!.add(value);
+
+                // Only initiate loading on first render of this node
+                if (shouldInitiateLoading && !imageCache.has(value) && !imageLoadingPromises.has(value)) {
+                  loadComfyImage(value, node.id).then(img => {
+                    // Request a redraw when image loads
+                    if (ctx.canvas && ctx.canvas.parentElement) {
+                      ctx.canvas.dispatchEvent(new Event('imageLoaded'));
+                    }
+                  }).catch(err => {
+                    console.log('Failed to load preview image:', value);
+                  });
+                }
+              }
+            }
+
+            // Calculate available height for widgets - widgets are prioritized
             const availableHeight = bounds.height - (widgetStartY - bounds.y) - 10;
-            const maxWidgetsToShow = Math.floor(availableHeight / widgetLineHeight);
+            const totalWidgetHeight = widgets.length * widgetLineHeight;
+            const maxWidgetsToShow = Math.min(widgets.length, Math.floor(availableHeight / widgetLineHeight));
+            const allWidgetsShown = widgets.length === maxWidgetsToShow;
 
             if (maxWidgetsToShow > 0) {
               // Render widgets based on LOD level
@@ -963,7 +1143,9 @@ export function renderNodes(
                     // Show actual value with lower opacity
                     ctx.textAlign = 'right';
                     let valueText = '';
-                    const value = widget.value;
+                    // Check modifiedWidgetValues first, then fall back to widget.value
+                    const modifiedValues = modifiedWidgetValues?.get(node.id);
+                    const value = modifiedValues?.[widget.name] !== undefined ? modifiedValues[widget.name] : widget.value;
 
                     if (value === null || value === undefined) {
                       valueText = 'null';
@@ -1031,7 +1213,9 @@ export function renderNodes(
                     // Widget value
                     ctx.textAlign = 'right';
                     let valueText = '';
-                    const value = widget.value;
+                    // Check modifiedWidgetValues first, then fall back to widget.value
+                    const modifiedValues = modifiedWidgetValues?.get(node.id);
+                    const value = modifiedValues?.[widget.name] !== undefined ? modifiedValues[widget.name] : widget.value;
 
                   if (value === null || value === undefined) {
                     valueText = 'null';
@@ -1076,7 +1260,119 @@ export function renderNodes(
                 ctx.font = `italic 11px system-ui, -apple-system, sans-serif`;
                 ctx.textAlign = 'center';
                 const moreText = `+${widgets.length - maxWidgetsToShow} more`;
-                ctx.fillText(moreText, bounds.x + bounds.width / 2, bounds.y + bounds.height - 12); // Increased padding from 6 to 12
+                ctx.fillText(moreText, bounds.x + bounds.width / 2, bounds.y + bounds.height - 12);
+              }
+
+              // Draw image preview at bottom ONLY if all widgets are shown and we have images
+              // Images are shown at ALL LOD levels for better visibility
+              if (allWidgetsShown && imageWidgets.length > 0) {
+                // Calculate the position and size for the preview area
+                const widgetEndY = widgetStartY + (maxWidgetsToShow * widgetLineHeight);
+                const remainingHeight = bounds.y + bounds.height - widgetEndY - 15; // Leave some padding
+
+                if (remainingHeight > 40) { // Only show if we have reasonable space
+                  const previewY = widgetEndY + 5;
+                  const previewHeight = remainingHeight;
+                  const previewPadding = 8;
+
+                  // Use full remaining height
+                  const imageHeight = previewHeight - previewPadding * 2;
+                  const imageSpacing = 8;
+                  const numImagesToShow = Math.min(imageWidgets.length, 3);
+
+                  // Use same width as widgets - full width divided by number of images
+                  const previewX = bounds.x + 8;
+                  const previewWidth = bounds.width - 16;
+
+                  // Width is fixed - divide widget width by number of images
+                  const imageWidth = (previewWidth - (imageSpacing * (numImagesToShow - 1))) / numImagesToShow;
+
+                  // Start from the left edge, same as widgets
+                  let imageX = previewX;
+
+                  for (let i = 0; i < numImagesToShow; i++) {
+                    const { value } = imageWidgets[i];
+
+                    // Check if image is in cache
+                    if (imageCache.has(value)) {
+                      const img = imageCache.get(value)!;
+
+                      // Track this cached image for the node if not already tracked
+                      if (!nodeImageMap.has(node.id)) {
+                        nodeImageMap.set(node.id, new Set());
+                      }
+                      nodeImageMap.get(node.id)!.add(value);
+
+                      // Draw container with fixed width and dynamic height
+                      ctx.save();
+                      ctx.beginPath();
+                      ctx.roundRect(imageX, previewY + previewPadding, imageWidth, imageHeight, 4);
+                      ctx.clip();
+
+                      // Fill width completely and crop height if needed (cover mode)
+                      const aspectRatio = img.width / img.height;
+                      const containerAspect = imageWidth / imageHeight;
+
+                      let sourceX = 0, sourceY = 0, sourceWidth = img.width, sourceHeight = img.height;
+
+                      if (aspectRatio > containerAspect) {
+                        // Image is wider - crop width to fit height
+                        sourceWidth = img.height * containerAspect;
+                        sourceX = (img.width - sourceWidth) / 2;
+                      } else {
+                        // Image is taller - crop height to fit width
+                        sourceHeight = img.width / containerAspect;
+                        sourceY = (img.height - sourceHeight) / 2;
+                      }
+
+                      // Draw image to fill the entire container
+                      ctx.drawImage(
+                        img,
+                        sourceX, sourceY, sourceWidth, sourceHeight,  // Source (what part of image to draw)
+                        imageX, previewY + previewPadding, imageWidth, imageHeight  // Destination (where to draw)
+                      );
+                      ctx.restore();
+
+                      // Draw border
+                      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                      ctx.lineWidth = 1;
+                      ctx.beginPath();
+                      ctx.roundRect(imageX, previewY + previewPadding, imageWidth, imageHeight, 4);
+                      ctx.stroke();
+                    } else {
+                      // Draw placeholder for loading
+                      ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+                      ctx.beginPath();
+                      ctx.roundRect(imageX, previewY + previewPadding, imageWidth, imageHeight, 4);
+                      ctx.fill();
+
+                      // Draw error indicator for failed image loads
+                      ctx.fillStyle = 'rgba(255, 100, 100, 0.8)';
+                      const fontSize = Math.min(32, Math.min(imageWidth, imageHeight) / 3);
+                      ctx.font = `${fontSize}px system-ui`;
+                      ctx.textAlign = 'center';
+                      ctx.textBaseline = 'middle';
+                      ctx.fillText('⚠', imageX + imageWidth / 2, previewY + previewPadding + imageHeight / 2);
+
+                      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                      ctx.lineWidth = 1;
+                      ctx.beginPath();
+                      ctx.roundRect(imageX, previewY + previewPadding, imageWidth, imageHeight, 4);
+                      ctx.stroke();
+                    }
+
+                    imageX += imageWidth + imageSpacing;
+                  }
+
+                  // Show count if more than 3 images
+                  if (imageWidgets.length > 3) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                    ctx.font = '12px system-ui';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(`+${imageWidgets.length - 3}`, imageX - imageSpacing/2, previewY + previewHeight / 2);
+                  }
+                }
               }
             }
           }

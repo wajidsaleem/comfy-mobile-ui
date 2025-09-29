@@ -66,7 +66,7 @@ import { IComfyGraphGroup } from '@/shared/types/app/base';
 
 // Utils
 import { SeedProcessingUtils, autoChangeSeed } from '@/shared/utils/seedProcessing';
-import { calculateAllBounds, ViewportTransform, NodeBounds, GroupBounds } from '@/shared/utils/rendering/CanvasRendererService';
+import { calculateAllBounds, ViewportTransform, NodeBounds, GroupBounds, clearNodeImageCache } from '@/shared/utils/rendering/CanvasRendererService';
 import { mapGroupsWithNodes, Group } from '@/utils/GroupNodeMapper';
 
 // Constants
@@ -2458,6 +2458,17 @@ const WorkflowEditor: React.FC = () => {
           getWidgetValue={widgetEditor.getWidgetValue}
           getNodeMode={widgetEditor.getNodeMode}
           onClose={() => {
+            // Clear image cache for the node when inspector closes
+            // as widget values may have changed
+            if (selectedNode?.id) {
+              const nodeId = typeof selectedNode.id === 'string' ? parseInt(selectedNode.id) : selectedNode.id;
+              clearNodeImageCache(nodeId);
+
+              // Trigger canvas redraw to reload images
+              if (canvasRef.current) {
+                canvasRef.current.dispatchEvent(new Event('imageLoaded'));
+              }
+            }
             setIsNodePanelVisible(false);
             setSelectedNode(null);
           }}

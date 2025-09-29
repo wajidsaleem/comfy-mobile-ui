@@ -11,6 +11,7 @@ import {
   drawRepositioningGrid,
   drawResizeGrippers,
   getGripperAtPoint,
+  clearNodeImageLoadingCache,
   NodeBounds,
   GroupBounds,
   ViewportTransform,
@@ -81,6 +82,13 @@ export const useCanvasRenderer = ({
 }: UseCanvasRendererProps) => {
   // Canvas configuration - use shared config
   const config = useMemo<CanvasConfig>(() => DEFAULT_CANVAS_CONFIG, []);
+
+  // Clear node image loading cache when workflow changes
+  useEffect(() => {
+    if (workflow) {
+      clearNodeImageLoadingCache();
+    }
+  }, [workflow?.id]); // Only clear when workflow ID changes
 
   // Internal execution state - subscribed from ComfyUIService
   const [executionState, setExecutionState] = useState<ExecutionState>({
@@ -322,6 +330,7 @@ export const useCanvasRenderer = ({
           showText: true, // Show text in detail view
           viewportScale: viewport.scale, // Pass viewport scale for responsive font sizing
           modifiedNodeIds, // Add modified nodes for green outline
+          modifiedWidgetValues, // Add modified widget values for accurate display
           repositionMode: repositionMode || null, // Add repositioning mode info
           connectionMode: connectionMode || null, // Add connection mode info for highlighting
           missingNodeIds: missingNodeIds || new Set(), // Add missing node IDs for red outline
@@ -337,8 +346,15 @@ export const useCanvasRenderer = ({
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
+    // Add listener for image loaded events to trigger redraw
+    const handleImageLoaded = () => {
+      draw();
+    };
+    canvas.addEventListener('imageLoaded', handleImageLoaded);
+
     return () => {
       window.removeEventListener('resize', resizeCanvas);
+      canvas.removeEventListener('imageLoaded', handleImageLoaded);
     };
   }, [workflow, viewport, nodeBounds, groupBounds, selectedNode, config, executionState, modifiedWidgetValues, repositionMode, missingNodeIds]);
 
