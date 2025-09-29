@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { IComfyWorkflow } from '@/shared/types/app/IComfyWorkflow';
 import type { IComfyGraphNode } from '@/shared/types/app/base';
+import type { ComfyGraphNode } from '@/core/domain';
 import { DEFAULT_CANVAS_CONFIG, CanvasConfig } from '@/config/canvasConfig';
 import {
   renderGroups,
@@ -327,7 +328,7 @@ export const useCanvasRenderer = ({
           longPressState: longPressState || null // Add long press state for visual feedback
         };
         
-        renderNodes(ctx, nodes, nodeBounds, config, renderingOptions);
+        renderNodes(ctx, nodes as ComfyGraphNode[], nodeBounds, config, renderingOptions);
       } 
 
       ctx.restore();

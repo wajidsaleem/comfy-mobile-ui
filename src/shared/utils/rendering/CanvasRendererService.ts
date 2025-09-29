@@ -4,6 +4,7 @@
 import type { IComfyGraphNode, IComfyGraphLink } from '@/shared/types/app/base';
 import { DEFAULT_CANVAS_CONFIG, CanvasConfig } from '@/config/canvasConfig';
 import { IComfyGraphGroup } from '@/shared/types/app/base';
+import { ComfyGraphNode } from '@/core/domain/ComfyGraphNode';
 
 // Alias for backward compatibility
 type IGroup = IComfyGraphGroup;
@@ -420,16 +421,16 @@ function getSlotPosition(
     const x = isOutput ? nodeBounds.x + nodeBounds.width : nodeBounds.x;
     return { x, y };
   }
-  
+
   const slotHeight = 20; // Height per slot
-  const topMargin = nodeBounds.height * 0.05; // 5% from top
-  
+  const topMargin = 35; // Fixed 35px from top (matching the slot rendering logic)
+
   // Calculate Y position - slots start from top margin, evenly spaced
   const y = nodeBounds.y + topMargin + (slotIndex * slotHeight) + (slotHeight / 2);
-  
+
   // X position depends on whether it's input (left) or output (right)
   const x = isOutput ? nodeBounds.x + nodeBounds.width : nodeBounds.x;
-  
+
   return { x, y };
 }
 
@@ -476,10 +477,19 @@ export function renderConnections(
     // Get the actual nodes to access slot information
     const sourceNode = sourceBounds.node;
     const targetNode = targetBounds.node;
-    
-    // Check if nodes are collapsed
-    const sourceCollapsed = sourceNode.flags?.collapsed === true;
-    const targetCollapsed = targetNode.flags?.collapsed === true;
+
+    // Check if nodes are collapsed or too small to fit slots
+    const sourceConnectedInputs = sourceNode.inputs?.filter((i: any) => i.link).length || 0;
+    const sourceConnectedOutputs = sourceNode.outputs?.filter((o: any) => o.links?.length > 0).length || 0;
+    const sourceMaxSlots = Math.max(sourceConnectedInputs, sourceConnectedOutputs);
+    const sourceSlotAreaHeight = sourceMaxSlots * 20 + 35;
+    const sourceCollapsed = sourceNode.flags?.collapsed === true || sourceSlotAreaHeight > sourceBounds.height;
+
+    const targetConnectedInputs = targetNode.inputs?.filter((i: any) => i.link).length || 0;
+    const targetConnectedOutputs = targetNode.outputs?.filter((o: any) => o.links?.length > 0).length || 0;
+    const targetMaxSlots = Math.max(targetConnectedInputs, targetConnectedOutputs);
+    const targetSlotAreaHeight = targetMaxSlots * 20 + 35;
+    const targetCollapsed = targetNode.flags?.collapsed === true || targetSlotAreaHeight > targetBounds.height;
     
     // For expanded nodes, calculate the visual index among connected slots only
     let sourceVisualIndex = sourceSlot;
@@ -544,7 +554,7 @@ export function renderConnections(
  */
 export function renderNodes(
   ctx: CanvasRenderingContext2D,
-  nodes: IComfyGraphNode[],
+  nodes: ComfyGraphNode[], // Properly typed as ComfyGraphNode array
   nodeBounds: Map<number, NodeBounds>,
   config: CanvasConfig = DEFAULT_CANVAS_CONFIG,
   options: RenderingOptions = {}
@@ -747,93 +757,352 @@ export function renderNodes(
     }
 
 
-    // Draw node title with simple text rendering (only if showText is enabled)
+    // Draw node title and widgets with LOD rendering
     if (showText) {
-      // Simple text color - opacity is already applied via globalAlpha for bypassed nodes
-      ctx.fillStyle = '#ffffff';
-      
-      // Linear font scaling from 0% to 80% viewport scale
-      // 0% → 50px, 10% → 45px, 20% → 40px, 30% → 35px, 40% → 30px, 50% → 25px, 60% → 20px, 70% → 15px, 80% → 10px
-      // Above 80% → stays at 10px
-      
       // Use viewport scale if provided, otherwise fallback to transform matrix
       let currentScale = 1.0; // Default scale
-      
+
       if (viewportScale !== undefined) {
         currentScale = viewportScale;
       } else {
         const transform = ctx.getTransform();
         currentScale = transform.a; // a is the horizontal scale factor
       }
-      
-      // Linear interpolation from 0% to 80%
-      const maxScale = 0.8;   // 80%
-      const minFontSize = 50; // Font size at 0% (50px)
-      const maxFontSize = 10; // Font size at 80%+ (10px)
-      
+
+      // LOD (Level of Detail) thresholds
+      const LOD_LOW = 0.5;     // Below 50% - very simplified
+      const LOD_MEDIUM = 0.8;  // 50% to 80% - basic widgets
+      const LOD_HIGH = 1.2;    // 80% to 120% - detailed widgets
+      // Above 120% - full detail with values
+
+      // Determine LOD level
+      let lodLevel: 'low' | 'medium' | 'high' | 'ultra';
+      if (currentScale < LOD_LOW) {
+        lodLevel = 'low';
+      } else if (currentScale < LOD_MEDIUM) {
+        lodLevel = 'medium';
+      } else if (currentScale < LOD_HIGH) {
+        lodLevel = 'high';
+      } else {
+        lodLevel = 'ultra';
+      }
+
+      // Calculate font sizes
+      const maxScale = 0.8;
+      const minFontSize = 50;
+      const maxFontSize = 10;
+
       let fontSize: number;
       if (currentScale >= maxScale) {
-        // Above 80%, use minimum font size
         fontSize = maxFontSize;
       } else {
-        // Linear interpolation between 0% and 80%
-        const progress = currentScale / maxScale; // 0.0 to 1.0
+        const progress = currentScale / maxScale;
         fontSize = minFontSize - (progress * (minFontSize - maxFontSize));
       }
-      
-      const clampedFontSize = Math.max(15, Math.min(60, fontSize)); // Safety bounds
-      
-      // Additional adjustment for collapsed nodes
-      const finalFontSize = isCollapsed 
-        ? Math.min(clampedFontSize * 0.8, bounds.height / 3) 
+
+      const clampedFontSize = Math.max(15, Math.min(60, fontSize));
+      const finalFontSize = isCollapsed
+        ? Math.min(clampedFontSize * 0.8, bounds.height / 3)
         : clampedFontSize;
-        
-      ctx.font = `${finalFontSize}px system-ui, -apple-system, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
 
-      // Use actual title if available, otherwise type
       const displayText = node.title || node.type || `Node ${node.id}`;
-      
-      const textX = bounds.x + bounds.width / 2;
-      const textY = bounds.y + bounds.height / 2; // Center text
-      
-      const maxTextWidth = bounds.width - 16;
-      
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
 
-      // Truncate text if too long
-      let truncatedText = displayText;
-      const textMetrics = ctx.measureText(displayText);
-      if (textMetrics.width > maxTextWidth) {
-        // Truncate with ellipsis
-        const ellipsis = '...';
-        const ellipsisWidth = ctx.measureText(ellipsis).width;
-        const availableWidth = maxTextWidth - ellipsisWidth;
-        
-        let truncated = displayText;
-        while (ctx.measureText(truncated).width > availableWidth && truncated.length > 0) {
-          truncated = truncated.slice(0, -1);
+      // Calculate if node is too small to show slots properly
+      const connectedInputs = node.inputs?.filter((i: any) => i.link).length || 0;
+      const connectedOutputs = node.outputs?.filter((o: any) => o.links?.length > 0).length || 0;
+      const maxSlots = Math.max(connectedInputs, connectedOutputs);
+      const requiredSlotHeight = maxSlots * 20 + 35; // slots * slotHeight + topMargin
+      const isTooSmallForSlots = bounds.height < requiredSlotHeight;
+
+      // Handle collapsed nodes or nodes too small for slots - title in center, no widgets
+      if (isCollapsed || isTooSmallForSlots) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${finalFontSize}px system-ui, -apple-system, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const textX = bounds.x + bounds.width / 2;
+        const textY = bounds.y + bounds.height / 2;
+        const maxTextWidth = bounds.width - 16;
+
+        // Truncate text if too long
+        let truncatedText = displayText;
+        const textMetrics = ctx.measureText(displayText);
+        if (textMetrics.width > maxTextWidth) {
+          const ellipsis = '...';
+          const ellipsisWidth = ctx.measureText(ellipsis).width;
+          const availableWidth = maxTextWidth - ellipsisWidth;
+
+          let truncated = displayText;
+          while (ctx.measureText(truncated).width > availableWidth && truncated.length > 0) {
+            truncated = truncated.slice(0, -1);
+          }
+          truncatedText = truncated + ellipsis;
         }
-        truncatedText = truncated + ellipsis;
+
+        ctx.fillText(truncatedText, textX, textY);
+      } else {
+        // Expanded nodes - title at top-left, widgets below with LOD
+        // Always show title at top-left for expanded nodes
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${Math.min(finalFontSize * 0.8, 20)}px system-ui, -apple-system, sans-serif`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+
+        // Draw title at top-left with padding
+        const titleX = bounds.x + 12;
+        const titleY = bounds.y + 8;
+        ctx.fillText(displayText, titleX, titleY);
+
+        // Calculate slot area to avoid overlap
+        let slotAreaHeight = 0;
+        if (node.inputs || node.outputs) {
+          const connectedInputs = node.inputs?.filter((i: any) => i.link).length || 0;
+          const connectedOutputs = node.outputs?.filter((o: any) => o.links?.length > 0).length || 0;
+          const maxSlots = Math.max(connectedInputs, connectedOutputs);
+          slotAreaHeight = maxSlots * 20 + 35; // slots * slotHeight + fixed topMargin (35px)
+        }
+
+        // Check if node is too small to fit slots properly - treat as collapsed
+        const treatAsCollapsed = slotAreaHeight > bounds.height;
+
+        // Draw widgets with LOD system - below slot area (only if not treating as collapsed)
+        if (!treatAsCollapsed && node.widgets && node.getWidgets) {
+          const widgets = node.getWidgets();
+          if (widgets.length > 0) {
+            // Widget area starts below title and slot area
+            const widgetStartY = Math.max(titleY + 30, bounds.y + slotAreaHeight + 10);
+            const widgetHeight = 24;
+            const widgetSpacing = 4;
+            const widgetLineHeight = widgetHeight + widgetSpacing;
+            const availableHeight = bounds.height - (widgetStartY - bounds.y) - 10;
+            const maxWidgetsToShow = Math.floor(availableHeight / widgetLineHeight);
+
+            if (maxWidgetsToShow > 0) {
+              // Render widgets based on LOD level
+              widgets.slice(0, maxWidgetsToShow).forEach((widget, index) => {
+                const widgetY = widgetStartY + (index * widgetLineHeight);
+                const widgetX = bounds.x + 8;
+                const widgetWidth = bounds.width - 16;
+
+                // Check if this widget is connected (receives value from another node)
+                const isConnectedWidget = node.inputs?.some((input: any) =>
+                  input.widget?.name === widget.name && input.link !== null && input.link !== undefined
+                );
+
+                // Draw widget background with rounded corners
+                const bgAlpha = lodLevel === 'ultra' ? 0.15 : (lodLevel === 'high' ? 0.1 : 0.05);
+
+                if (isConnectedWidget) {
+                  // Connected widget - green border and lighter background
+                  ctx.fillStyle = `rgba(16, 185, 129, ${bgAlpha})`;
+                  ctx.strokeStyle = `rgba(16, 185, 129, 0.4)`;
+                  ctx.lineWidth = 1.5;
+                } else {
+                  // Regular widget
+                  ctx.fillStyle = `rgba(255, 255, 255, ${bgAlpha})`;
+                  ctx.strokeStyle = `rgba(255, 255, 255, ${bgAlpha * 2})`;
+                  ctx.lineWidth = 1;
+                }
+
+                ctx.beginPath();
+                ctx.roundRect(widgetX, widgetY, widgetWidth, widgetHeight, 4);
+                ctx.fill();
+                if (lodLevel === 'ultra' || lodLevel === 'high') {
+                  ctx.stroke();
+                }
+
+                // LOD-based widget rendering
+                if (lodLevel === 'low') {
+                  // Very simplified - just show colored bars
+                  ctx.fillStyle = isConnectedWidget ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 255, 255, 0.3)';
+                  ctx.fillRect(widgetX + 2, widgetY + 2, widgetWidth - 4, widgetHeight - 4);
+                } else if (lodLevel === 'medium') {
+                  // Show widget names only
+                  ctx.fillStyle = isConnectedWidget ? 'rgba(16, 185, 129, 0.7)' : 'rgba(255, 255, 255, 0.5)';
+                  ctx.font = `11px system-ui, -apple-system, sans-serif`;
+                  ctx.textAlign = 'left';
+                  ctx.textBaseline = 'middle';
+                  const widgetName = widget.name || `Widget ${index}`;
+                  ctx.fillText(widgetName, widgetX + 8, widgetY + widgetHeight / 2);
+
+                  // Add "⤓" indicator for connected widgets
+                  if (isConnectedWidget) {
+                    ctx.fillStyle = 'rgba(16, 185, 129, 0.8)';
+                    ctx.textAlign = 'right';
+                    ctx.fillText('⤓', widgetX + widgetWidth - 8, widgetY + widgetHeight / 2);
+                  }
+                } else if (lodLevel === 'high') {
+                  // Show names and actual values (with lower opacity)
+                  const widgetFontSize = 12;
+                  ctx.font = `${widgetFontSize}px system-ui, -apple-system, sans-serif`;
+
+                  // Widget name
+                  ctx.fillStyle = isConnectedWidget ? 'rgba(16, 185, 129, 0.7)' : 'rgba(255, 255, 255, 0.7)';
+                  ctx.textAlign = 'left';
+                  ctx.textBaseline = 'middle';
+                  const widgetName = widget.name || `Widget ${index}`;
+                  const maxNameWidth = widgetWidth * 0.5;
+
+                  let truncatedName = widgetName;
+                  if (ctx.measureText(widgetName).width > maxNameWidth) {
+                    while (ctx.measureText(truncatedName + '...').width > maxNameWidth && truncatedName.length > 0) {
+                      truncatedName = truncatedName.slice(0, -1);
+                    }
+                    truncatedName += '...';
+                  }
+                  ctx.fillText(truncatedName, widgetX + 8, widgetY + widgetHeight / 2);
+
+                  // Show value only if not connected
+                  if (isConnectedWidget) {
+                    // Show arrow indicator for connected widgets
+                    ctx.fillStyle = 'rgba(16, 185, 129, 0.8)';
+                    ctx.textAlign = 'right';
+                    ctx.fillText('⤓', widgetX + widgetWidth - 8, widgetY + widgetHeight / 2);
+                  } else {
+                    // Show actual value with lower opacity
+                    ctx.textAlign = 'right';
+                    let valueText = '';
+                    const value = widget.value;
+
+                    if (value === null || value === undefined) {
+                      valueText = 'null';
+                      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    } else if (typeof value === 'boolean') {
+                      valueText = value ? 'true' : 'false';
+                      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    } else if (typeof value === 'number') {
+                      valueText = Number.isInteger(value) ? value.toString() : value.toFixed(1);
+                      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    } else if (typeof value === 'string') {
+                      valueText = value;
+                      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    } else if (Array.isArray(value)) {
+                      valueText = `[${value.length}]`;
+                      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    } else if (typeof value === 'object') {
+                      valueText = '{...}';
+                      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    } else {
+                      valueText = String(value);
+                      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    }
+
+                    // Truncate value if too long
+                    const maxValueWidth = widgetWidth * 0.4;
+                    if (ctx.measureText(valueText).width > maxValueWidth) {
+                      while (ctx.measureText(valueText + '...').width > maxValueWidth && valueText.length > 0) {
+                        valueText = valueText.slice(0, -1);
+                      }
+                      valueText += '...';
+                    }
+
+                    ctx.fillText(valueText, widgetX + widgetWidth - 8, widgetY + widgetHeight / 2);
+                  }
+                } else {
+                  // Ultra detail - full names and values
+                  const widgetFontSize = 13;
+                  ctx.font = `${widgetFontSize}px system-ui, -apple-system, sans-serif`;
+
+                  // Widget name
+                  ctx.fillStyle = isConnectedWidget ? 'rgba(16, 185, 129, 0.9)' : 'rgba(255, 255, 255, 0.8)';
+                  ctx.textAlign = 'left';
+                  ctx.textBaseline = 'middle';
+                  const widgetName = widget.name || `Widget ${index}`;
+                  const maxNameWidth = widgetWidth * 0.45;
+
+                  let truncatedName = widgetName;
+                  if (ctx.measureText(widgetName).width > maxNameWidth) {
+                    while (ctx.measureText(truncatedName + '...').width > maxNameWidth && truncatedName.length > 0) {
+                      truncatedName = truncatedName.slice(0, -1);
+                    }
+                    truncatedName += '...';
+                  }
+                  ctx.fillText(truncatedName, widgetX + 8, widgetY + widgetHeight / 2);
+
+                  // Show value only if not connected
+                  if (isConnectedWidget) {
+                    // Show "from input" indicator for connected widgets
+                    ctx.fillStyle = 'rgba(16, 185, 129, 1)';
+                    ctx.textAlign = 'right';
+                    ctx.font = `${widgetFontSize}px system-ui, -apple-system, sans-serif`;
+                    ctx.fillText('⤓', widgetX + widgetWidth - 8, widgetY + widgetHeight / 2);
+                  } else {
+                    // Widget value
+                    ctx.textAlign = 'right';
+                    let valueText = '';
+                    const value = widget.value;
+
+                  if (value === null || value === undefined) {
+                    valueText = 'null';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                  } else if (typeof value === 'boolean') {
+                    valueText = value ? 'true' : 'false';
+                    ctx.fillStyle = '#ffffff';
+                  } else if (typeof value === 'number') {
+                    valueText = Number.isInteger(value) ? value.toString() : value.toFixed(2);
+                    ctx.fillStyle = '#ffffff';
+                  } else if (typeof value === 'string') {
+                    valueText = value;
+                    ctx.fillStyle = '#ffffff';
+                  } else if (Array.isArray(value)) {
+                    valueText = `[${value.length}]`;
+                    ctx.fillStyle = '#8b5cf6';
+                  } else if (typeof value === 'object') {
+                    valueText = '{...}';
+                    ctx.fillStyle = '#8b5cf6';
+                  } else {
+                    valueText = String(value);
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                  }
+
+                  // Truncate value if too long
+                  const maxValueWidth = widgetWidth * 0.45;
+                  if (ctx.measureText(valueText).width > maxValueWidth) {
+                    while (ctx.measureText(valueText + '...').width > maxValueWidth && valueText.length > 0) {
+                      valueText = valueText.slice(0, -1);
+                    }
+                    valueText += '...';
+                  }
+
+                  ctx.fillText(valueText, widgetX + widgetWidth - 8, widgetY + widgetHeight / 2);
+                  }
+                }
+              });
+
+              // Show indicator if there are more widgets
+              if (widgets.length > maxWidgetsToShow && lodLevel !== 'low') {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.font = `italic 11px system-ui, -apple-system, sans-serif`;
+                ctx.textAlign = 'center';
+                const moreText = `+${widgets.length - maxWidgetsToShow} more`;
+                ctx.fillText(moreText, bounds.x + bounds.width / 2, bounds.y + bounds.height - 12); // Increased padding from 6 to 12
+              }
+            }
+          }
+        }
       }
-      
-      // Draw simple text without stroke
-      ctx.fillText(truncatedText, textX, textY);
     }
 
     // Draw input and output slots
     if (showText) { // Only draw slots when text is shown (detail view)
       const slotRadius = 4;
       const slotHeight = 20;
-      const topMargin = bounds.height * 0.05; // 5% from top
-      
+
+      // Check if node is too small to fit slots properly (use treatAsCollapsed from widget section)
+      const connectedInputs = node.inputs?.filter((i: any) => i.link).length || 0;
+      const connectedOutputs = node.outputs?.filter((o: any) => o.links?.length > 0).length || 0;
+      const maxSlots = Math.max(connectedInputs, connectedOutputs);
+      const slotAreaHeight = maxSlots * 20 + 35;
+      const treatAsCollapsed = isCollapsed || slotAreaHeight > bounds.height;
+
+      const topMargin = treatAsCollapsed ? bounds.height * 0.05 : 35; // Fixed 35px for expanded nodes, 5% for collapsed
+
       // Get current font size for slot labels
       const slotFontSize = 10; // Fixed small size for slot labels
-      
+
       // Check if collapsed - collapsed nodes show only one slot
-      if (isCollapsed) {
+      if (treatAsCollapsed) {
         // For collapsed nodes, show single slot on each side if there are connections
         const hasInputConnections = node.inputs?.some((input: any) => input.link);
         const hasOutputConnections = node.outputs?.some((output: any) => output.links && output.links.length > 0);
@@ -1260,7 +1529,7 @@ export function generateWorkflowThumbnail(
   // Connection lines are omitted in thumbnails for better visual clarity
 
   // Draw nodes (foreground layer) - no text for thumbnails
-  renderNodes(ctx, workflow.nodes, nodeBounds, config, { showText: false });
+  renderNodes(ctx, workflow.nodes as ComfyGraphNode[], nodeBounds, config, { showText: false });
 
   return canvas.toDataURL('image/png');
 }
