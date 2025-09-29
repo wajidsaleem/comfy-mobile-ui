@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, Search, X } from 'lucide-react';
@@ -24,7 +25,9 @@ export const ComboWidget: React.FC<ComboWidgetProps> = ({
 }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputContainerRef = useRef<HTMLDivElement>(null);
 
   // Handle widget callback execution
   const executeWidgetCallback = (value: any) => {
@@ -46,19 +49,36 @@ export const ComboWidget: React.FC<ComboWidgetProps> = ({
   // Use provided options or fallback to param.possibleValues
   const selectOptions = options || param.possibleValues || [];
 
-  // Close dropdown when clicking outside
+  // Update dropdown position and close when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+          inputContainerRef.current && !inputContainerRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
         setSearchQuery('');
       }
     };
 
+    const updatePosition = () => {
+      if (inputContainerRef.current && isDropdownOpen) {
+        const rect = inputContainerRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + 4,
+          left: rect.left,
+          width: rect.width
+        });
+      }
+    };
+
     if (isDropdownOpen) {
+      updatePosition();
       document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
       };
     }
   }, [isDropdownOpen]);
@@ -238,7 +258,7 @@ export const ComboWidget: React.FC<ComboWidgetProps> = ({
       <label className="text-sm text-slate-600 dark:text-slate-400">
         {param.name}
       </label>
-      <div className="relative" ref={dropdownRef}>
+      <div className="relative" ref={inputContainerRef}>
         <div className="flex">
           <Input
             type="text"
@@ -272,9 +292,18 @@ export const ComboWidget: React.FC<ComboWidgetProps> = ({
           </div>
         </div>
         
-        {/* Dropdown */}
-        {isDropdownOpen && (
-          <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-hidden">
+        {/* Dropdown Portal */}
+        {isDropdownOpen && ReactDOM.createPortal(
+          <div
+            ref={dropdownRef}
+            className="z-[9999] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-hidden"
+            style={{
+              position: 'fixed',
+              top: `${dropdownPosition.top}px`,
+              left: `${dropdownPosition.left}px`,
+              width: `${dropdownPosition.width}px`
+            }}
+          >
             {/* Search input */}
             <div className="p-2 border-b border-slate-200 dark:border-slate-700">
               <div className="relative">
@@ -314,7 +343,8 @@ export const ComboWidget: React.FC<ComboWidgetProps> = ({
                 </div>
               )}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </div>

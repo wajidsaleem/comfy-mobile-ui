@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import React, { forwardRef } from 'react';
-import { Loader2, Dices, Users, FileJson, Database, Hash, Camera, Brush, Move, Link, AlertTriangle } from 'lucide-react';
+import { Loader2, Dices, Users, FileJson, Database, Hash, Camera, Brush, Move, Link, AlertTriangle, Package } from 'lucide-react';
+import type { MissingModelInfo } from '@/services/MissingModelsService';
 
 interface SettingsDropdownProps {
   isOpen: boolean;
@@ -26,6 +27,8 @@ interface SettingsDropdownProps {
   missingNodesCount?: number;
   installablePackageCount?: number;
   onShowMissingNodeInstaller?: () => void;
+  missingModels?: MissingModelInfo[];
+  onOpenMissingModelDetector?: () => void;
 }
 
 export const SettingsDropdown = forwardRef<HTMLDivElement, SettingsDropdownProps>(({ 
@@ -46,6 +49,8 @@ export const SettingsDropdown = forwardRef<HTMLDivElement, SettingsDropdownProps
   missingNodesCount = 0,
   installablePackageCount = 0,
   onShowMissingNodeInstaller,
+  missingModels = [],
+  onOpenMissingModelDetector,
 }, ref) => {
   if (!isOpen) return null;
 
@@ -65,7 +70,7 @@ export const SettingsDropdown = forwardRef<HTMLDivElement, SettingsDropdownProps
         {/* Content container - EXACTLY like QuickActionPanel */}
         <div className="relative z-10">
           {/* Group 1: Workflow Tools */}
-          {(onShowGroupModer || onRandomizeSeeds || onToggleRepositionMode || onToggleConnectionMode || (missingNodesCount ?? 0) > 0) && (
+          {(onShowGroupModer || onRandomizeSeeds || onToggleRepositionMode || onToggleConnectionMode || (missingNodesCount ?? 0) > 0 || missingModels.length > 0) && (
             <>
               {missingNodesCount > 0 && onShowMissingNodeInstaller && (
                 <button
@@ -79,6 +84,20 @@ export const SettingsDropdown = forwardRef<HTMLDivElement, SettingsDropdownProps
                   {installablePackageCount > 0 && (
                     <Badge variant="destructive" className="ml-auto text-xs">{installablePackageCount}</Badge>
                   )}
+                </button>
+              )}
+              {missingModels.length > 0 && onOpenMissingModelDetector && (
+                <button
+                  onClick={onOpenMissingModelDetector}
+                  className="w-full px-4 py-3 flex items-center space-x-3 hover:bg-yellow-500/10 dark:hover:bg-yellow-900/20 transition-colors"
+                >
+                  <Package className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                  <span className="text-sm font-medium text-yellow-700 dark:text-yellow-300 text-left flex-1">
+                    Missing Model Detector
+                  </span>
+                  <Badge variant="outline" className="ml-auto text-xs border-yellow-600 text-yellow-700 dark:border-yellow-400 dark:text-yellow-300">
+                    {missingModels.length}
+                  </Badge>
                 </button>
               )}
               {/* Group Title */}

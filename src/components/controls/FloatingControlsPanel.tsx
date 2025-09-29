@@ -9,6 +9,7 @@ import TriggerWordSelector from './TriggerWordSelector';
 import { SettingsDropdown } from './SettingsDropdown';
 import ComfyUIService from '@/infrastructure/api/ComfyApiClient';
 import type { LogEntry, LogsWsMessage } from '@/core/domain';
+import type { MissingModelInfo } from '@/services/MissingModelsService';
 
 
 interface SearchableNode {
@@ -35,6 +36,8 @@ interface FloatingControlsPanelProps {
   missingNodesCount?: number;
   installablePackageCount?: number;
   onShowMissingNodeInstaller?: () => void;
+  missingModels?: MissingModelInfo[];
+  onOpenMissingModelDetector?: () => void;
   // Repositioning mode controls (for passing to SettingsDropdown)
   repositionMode?: {
     isActive: boolean;
@@ -64,6 +67,8 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
   missingNodesCount = 0,
   installablePackageCount = 0,
   onShowMissingNodeInstaller,
+  missingModels = [],
+  onOpenMissingModelDetector,
   repositionMode,
   onToggleRepositionMode,
   connectionMode,
@@ -625,9 +630,12 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
                   isSettingsOpen ? 'rotate-90' : ''
                 }`}
               />
-              {missingNodesCount > 0 && (
+              {/* Priority: Red for missing nodes, Yellow for missing models only */}
+              {missingNodesCount > 0 ? (
                 <span className="pointer-events-none absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_1.5px_rgba(15,23,42,0.8)] animate-pulse" />
-              )}
+              ) : missingModels.length > 0 ? (
+                <span className="pointer-events-none absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-yellow-500 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9)] dark:shadow-[0_0_0_1.5px_rgba(15,23,42,0.8)] animate-pulse" />
+              ) : null}
             </Button>
           </div>
         </div>
@@ -654,6 +662,8 @@ export const FloatingControlsPanel: React.FC<FloatingControlsPanelProps> = ({
         missingNodesCount={missingNodesCount}
         installablePackageCount={installablePackageCount}
         onShowMissingNodeInstaller={onShowMissingNodeInstaller}
+        missingModels={missingModels}
+        onOpenMissingModelDetector={onOpenMissingModelDetector}
       />
 
       {/* Search Panel - Independent container below main controls */}

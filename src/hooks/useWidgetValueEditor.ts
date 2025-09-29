@@ -194,12 +194,39 @@ export const useWidgetValueEditor = (options?: UseWidgetValueEditorOptions) => {
   const clearModifications = () => {
     // Clear local state
     setModifiedWidgetValues(new Map());
-    
+
     // ComfyGraphProcessor handles its own clearing
     if (options?.processor) {
       options.processor.clearModifications?.();
     }
-    
+
+  };
+
+  // Directly set a modified widget value without going through edit mode
+  const setModifiedWidgetValue = (nodeId: number, paramName: string, value: any) => {
+    setModifiedWidgetValues(prev => {
+      const newMap = new Map(prev);
+      const nodeValues = newMap.get(nodeId) || {};
+      nodeValues[paramName] = value;
+      newMap.set(nodeId, nodeValues);
+      return newMap;
+    });
+
+    // Also save to ComfyGraphProcessor if available
+    if (options?.processor) {
+      options.processor.setWidgetValue(nodeId, paramName, value);
+    } else {
+      // Log direct widget value changes when no processor
+      graphChangeLogger.logChange({
+        nodeId,
+        nodeType: 'unknown',
+        changeType: 'direct_access',
+        path: `widgets_values.${paramName}`,
+        oldValue: undefined,
+        newValue: value,
+        source: 'useWidgetValueEditor.setModifiedWidgetValue'
+      });
+    }
   };
 
   // Check if there are any modifications - check local state first
@@ -231,6 +258,7 @@ export const useWidgetValueEditor = (options?: UseWidgetValueEditorOptions) => {
     setWidgetValue,
     setNodeMode,
     clearModifications,
+    setModifiedWidgetValue,
     hasModifications,
     
     // Direct state setter for advanced use cases (like snapshot loading)

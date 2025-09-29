@@ -14,6 +14,7 @@ import type { NodeWidgetModifications } from '@/shared/types/widgets/widgetModif
 import { WorkflowGraphService, serializeGraph, loadWorkflowToGraph, addNodeToWorkflow, removeNodeWithLinks, removeGroup, createInputSlots, createOutputSlots } from '@/core/services/WorkflowGraphService';
 import { ConnectionService } from '@/services/ConnectionService';
 import { detectMissingWorkflowNodes, MissingWorkflowNode, resolveMissingNodePackages } from '@/services/MissingNodesService';
+import { detectMissingModels, formatMissingModelsMessage, getUniqueMissingModels } from '@/services/MissingModelsService';
 import { ComfyGraph } from '@/core/domain/ComfyGraph';
 
 // Infrastructure Services
@@ -44,6 +45,7 @@ import { GroupModeModal } from '@/components/ui/GroupModeModal';
 import { JsonViewerModal } from '@/components/modals/JsonViewerModal';
 import { NodeAddModal } from '@/components/modals/NodeAddModal';
 import MissingNodeInstallerModal from '@/components/modals/MissingNodeInstallerModal';
+import MissingModelDetectorModal from '@/components/modals/MissingModelDetectorModal';
 
 // Hooks
 import { useCanvasInteraction } from '@/hooks/useCanvasInteraction';
@@ -111,6 +113,8 @@ const WorkflowEditor: React.FC = () => {
   const [missingWorkflowNodes, setMissingWorkflowNodes] = useState<MissingWorkflowNode[]>([]);
   const [isMissingNodeModalOpen, setIsMissingNodeModalOpen] = useState(false);
   const [installablePackageCount, setInstallablePackageCount] = useState<number>(0);
+  const [missingModels, setMissingModels] = useState<ReturnType<typeof detectMissingModels>>([]);
+  const [isMissingModelModalOpen, setIsMissingModelModalOpen] = useState(false);
   
   // UI state
   const [isNodePanelVisible, setIsNodePanelVisible] = useState<boolean>(false);
@@ -346,6 +350,24 @@ const WorkflowEditor: React.FC = () => {
       
       // Use nodes directly from ComfyGraphProcessor - no conversion
       const nodes = graph._nodes || [];
+
+      // Check for missing models in node widgets (COMBO widgets)
+      const detectedMissingModels = detectMissingModels(nodes);
+      setMissingModels(detectedMissingModels);
+
+      if (detectedMissingModels.length > 0) {
+        const uniqueMissingModels = getUniqueMissingModels(detectedMissingModels);
+        const formattedMessage = formatMissingModelsMessage(detectedMissingModels);
+
+        toast.error(`Missing models detected`, {
+          description: `The following models are not available on the server:\n${formattedMessage}`,
+          duration: 10000,
+        });
+
+        console.warn('Missing models detected:', detectedMissingModels);
+      } else {
+        setIsMissingModelModalOpen(false);
+      }
 
       // ??Check for missing node types and show notification (excluding virtual nodes)
       const detectedMissingNodes = detectMissingWorkflowNodes(workflowData as IComfyJson, fetchedObjectInfo);
@@ -610,12 +632,12 @@ const WorkflowEditor: React.FC = () => {
               // Handle special _node_mode parameter
               if (paramName === '_node_mode') {
                 const modeName = newValue === 0 ? 'ALWAYS' : newValue === 2 ? 'MUTE' : newValue === 4 ? 'BYPASS' : `UNKNOWN(${newValue})`;
-                console.log(`?렞 Setting node ${nodeId} mode to ${newValue} (${modeName})`);
+                console.log(`Setting node ${nodeId} mode to ${newValue} (${modeName})`);
                 graphNode.mode = newValue;
                 return; // Skip widget processing for node mode
               }
               
-              console.log(`?뵇 Node ${nodeId} current structure:`, {
+              console.log(`Node ${nodeId} current structure:`, {
                 hasWidgets: !!graphNode.widgets,
                 widgetNames: graphNode.widgets?.map((w: any) => w.name),
                 has_widgets: !!graphNode._widgets,
@@ -703,11 +725,19 @@ const WorkflowEditor: React.FC = () => {
       
       // Clear modifications
       widgetEditor.clearModifications();
-      
+
+      // Re-detect missing models after save - same as initial load
+      if (comfyGraphRef.current) {
+        // Use _nodes like in initial load
+        const nodes = comfyGraphRef.current._nodes || [];
+        const detectedMissingModels = detectMissingModels(nodes);
+        setMissingModels(detectedMissingModels);
+      }
+
       // Success animation
       setIsSaving(false);
       setSaveSucceeded(true);
-      
+
       // Reset success state after animation completes
       setTimeout(() => {
         setSaveSucceeded(false);
@@ -1217,7 +1247,7 @@ const WorkflowEditor: React.FC = () => {
         } else {
           comfyNode.bgcolor = bgcolor;
         }
-        console.log(`?렓 Updated ComfyGraph node ${nodeId} bgcolor immediately:`, {
+        console.log(`Updated ComfyGraph node ${nodeId} bgcolor immediately:`, {
           nodeId,
           newBgcolor: bgcolor === '' ? 'cleared' : bgcolor
         });
@@ -2304,7 +2334,7 @@ const WorkflowEditor: React.FC = () => {
                         updatedWorkflowJson.nodes[nodeIndex].size = change.newSize;
                         // Also update position if it changed during resize
                         updatedWorkflowJson.nodes[nodeIndex].pos = change.newPosition;
-                        console.log(`?뱩 Updated node ${change.nodeId} size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
+                        console.log(`Updated node ${change.nodeId} size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
                       } else {
                         console.warn(`Node ${change.nodeId} not found in workflow_json.nodes array for resize`);
                       }
@@ -2321,7 +2351,7 @@ const WorkflowEditor: React.FC = () => {
                           change.newSize[0],     // width
                           change.newSize[1]      // height
                         ];
-                        console.log(`?뱩 Updated group ${change.groupId} size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
+                        console.log(`Updated group ${change.groupId} size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
                       } else {
                         console.warn(`Group ${change.groupId} not found in workflow_json.groups array for resize`);
                       }
@@ -2335,7 +2365,7 @@ const WorkflowEditor: React.FC = () => {
                           change.newSize[0],     // width
                           change.newSize[1]      // height
                         ];
-                        console.log(`?뱩 Updated group ${change.groupId} (object format) size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
+                        console.log(`Updated group ${change.groupId} (object format) size to [${change.newSize[0]}, ${change.newSize[1]}] and position to [${change.newPosition[0]}, ${change.newPosition[1]}]`);
                       } else {
                         console.warn(`Group ${change.groupId} not found in workflow_json.groups object for resize`);
                       }
@@ -2371,7 +2401,7 @@ const WorkflowEditor: React.FC = () => {
               setWorkflow(updatedWorkflow);              
               
               const totalChanges = (changes.nodeChanges?.length || 0) + (changes.groupChanges?.length || 0) + (changes.resizeChanges?.length || 0);
-              console.log(`?뱧 Repositioning applied successfully: ${changes.nodeChanges?.length || 0} nodes, ${changes.groupChanges?.length || 0} groups, and ${changes.resizeChanges?.length || 0} resize changes updated (${totalChanges} total)`);
+              console.log(`Repositioning applied successfully: ${changes.nodeChanges?.length || 0} nodes, ${changes.groupChanges?.length || 0} groups, and ${changes.resizeChanges?.length || 0} resize changes updated (${totalChanges} total)`);
 
               await loadWorkflow();
               
@@ -2418,6 +2448,8 @@ const WorkflowEditor: React.FC = () => {
           onShowWorkflowJson={handleShowWorkflowJson}
           onShowObjectInfo={handleShowObjectInfo}
           onRefreshWorkflow={() => refreshNodeSlots()}
+          missingModels={missingModels}
+          onOpenMissingModelDetector={() => setIsMissingModelModalOpen(true)}
           repositionMode={{
             isActive: canvasInteraction.repositionMode.isActive
           }}
@@ -2518,6 +2550,21 @@ const WorkflowEditor: React.FC = () => {
             setInstallablePackageCount((prev) => Math.max(prev - queuedCount, 0));
           }
         }}
+      />
+      <MissingModelDetectorModal
+        isOpen={isMissingModelModalOpen}
+        onClose={() => {
+          setIsMissingModelModalOpen(false);
+          // Re-detect missing models same as initial load
+          if (comfyGraphRef.current) {
+            // Use _nodes like in initial load
+            const nodes = comfyGraphRef.current._nodes || [];
+            const detectedMissingModels = detectMissingModels(nodes);
+            setMissingModels(detectedMissingModels);
+          }
+        }}
+        missingModels={missingModels}
+        widgetEditor={widgetEditor}
       />
       <WorkflowSnapshots
         isOpen={isWorkflowSnapshotsOpen}
