@@ -2186,6 +2186,17 @@ const WorkflowEditor: React.FC = () => {
         onNavigateBack={() => {
           // If NodeInspector or GroupInspector is open, close it first
           if (isNodePanelVisible) {
+            // Clear image cache for the node when inspector closes
+            // as widget values may have changed
+            if (selectedNode?.id) {
+              const nodeId = typeof selectedNode.id === 'string' ? parseInt(selectedNode.id) : selectedNode.id;
+              clearNodeImageCache(nodeId);
+
+              // Trigger canvas redraw to reload images
+              if (canvasRef.current) {
+                canvasRef.current.dispatchEvent(new Event('imageLoaded'));
+              }
+            }
             setIsNodePanelVisible(false);
             setSelectedNode(null);
           } else {
