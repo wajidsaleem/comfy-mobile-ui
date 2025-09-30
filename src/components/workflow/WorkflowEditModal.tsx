@@ -12,9 +12,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { X, Plus, Save, Trash2, RefreshCw } from 'lucide-react';
+import { X, Plus, Save, Trash2, RefreshCw, Copy } from 'lucide-react';
 import { Workflow } from '@/shared/types/app/IComfyWorkflow';
-import { updateWorkflow, removeWorkflow } from '@/infrastructure/storage/IndexedDBWorkflowService';
+import { updateWorkflow, removeWorkflow, addWorkflow, loadAllWorkflows } from '@/infrastructure/storage/IndexedDBWorkflowService';
 import { generateWorkflowThumbnail } from '@/shared/utils/rendering/CanvasRendererService';
 import { toast } from 'sonner';
 
@@ -24,6 +24,7 @@ interface WorkflowEditModalProps {
   workflow: Workflow | null;
   onWorkflowUpdated: (updatedWorkflow: Workflow) => void;
   onWorkflowDeleted?: (workflowId: string) => void;
+  onWorkflowCopied?: (newWorkflow: Workflow) => void;
 }
 
 const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
@@ -31,7 +32,8 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
   onClose,
   workflow,
   onWorkflowUpdated,
-  onWorkflowDeleted
+  onWorkflowDeleted,
+  onWorkflowCopied
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -160,12 +162,73 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
     onClose();
   };
 
+  const handleCopyWorkflow = async () => {
+    if (!workflow) return;
+
+    setIsLoading(true);
+    try {
+      // Load all existing workflows to find duplicate names
+      const allWorkflows = await loadAllWorkflows();
+
+      // Find the highest number suffix for workflows with similar names
+      const baseName = workflow.name.replace(/_\d+$/, ''); // Remove existing number suffix
+      const regex = new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:_(\\d+))?$`);
+
+      let maxNumber = 0;
+      allWorkflows.forEach(w => {
+        const match = w.name.match(regex);
+        if (match) {
+          const num = match[1] ? parseInt(match[1]) : 0;
+          maxNumber = Math.max(maxNumber, num);
+        }
+      });
+
+      // Create new workflow with incremented suffix
+      const newNumber = maxNumber + 1;
+      const newName = `${baseName}_${newNumber.toString().padStart(2, '0')}`;
+
+      // Generate new ID using crypto.randomUUID() or fallback
+      const newId = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      const copiedWorkflow: Workflow = {
+        ...workflow,
+        id: newId,
+        name: newName,
+        createdAt: new Date(),
+        modifiedAt: new Date()
+      };
+
+      // Add to storage
+      await addWorkflow(copiedWorkflow);
+
+      toast.success(`Workflow copied as "${newName}"`);
+
+      // Close modal first
+      onClose();
+
+      // Notify parent component after modal is closed to ensure state update happens
+      // Use setTimeout to ensure the callback runs after modal close animation
+      setTimeout(() => {
+        if (onWorkflowCopied) {
+          onWorkflowCopied(copiedWorkflow);
+        }
+      }, 0);
+    } catch (error) {
+      console.error('Failed to copy workflow:', error);
+      toast.error('Failed to copy workflow');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!workflow) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent 
-        className="sm:max-w-[500px] bg-white/10 backdrop-blur-xl border border-white/20 shadow-[0_20px_60px_rgba(0,0,0,0.4)] dark:bg-slate-900/10 dark:border-slate-700/30 dark:shadow-[0_20px_60px_rgba(0,0,0,0.8)]"
+      <DialogContent
+        className="sm:max-w-[500px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
@@ -189,7 +252,7 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter workflow name"
-                className="w-full bg-white/50 backdrop-blur-sm border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-600/50"
+                className="w-full"
                 autoFocus={false}
               />
             </div>
@@ -205,7 +268,7 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
                 placeholder="Enter workflow description (optional)"
                 rows={3}
-                className="w-full resize-none bg-white/50 backdrop-blur-sm border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-600/50"
+                className="w-full resize-none"
               />
             </div>
 
@@ -222,7 +285,7 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
                     <Badge
                       key={index}
                       variant="secondary"
-                      className="px-2 py-1 text-xs bg-white/50 backdrop-blur-sm border border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-600/50 text-slate-700 dark:text-slate-300"
+                      className="px-2 py-1 text-xs"
                     >
                       {tag}
                       <button
@@ -247,7 +310,7 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
                   onChange={(e) => setNewTag(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Add a tag"
-                  className="flex-1 bg-white/50 backdrop-blur-sm border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-600/50"
+                  className="flex-1"
                 />
                 <Button
                   onClick={(e) => {
@@ -258,7 +321,6 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
                   disabled={!newTag.trim()}
                   size="sm"
                   variant="outline"
-                  className="bg-white/50 backdrop-blur-sm border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-600/50"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
@@ -300,7 +362,6 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
                   disabled={isRegeneratingThumbnail || isLoading}
                   variant="outline"
                   size="sm"
-                  className="bg-white/50 backdrop-blur-sm border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-600/50"
                 >
                   <RefreshCw className={`h-4 w-4 mr-2 ${isRegeneratingThumbnail ? 'animate-spin' : ''}`} />
                   {isRegeneratingThumbnail ? 'Regenerating...' : 'Regenerate'}
@@ -325,25 +386,47 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
                 </div>
               </div>
 
-              {/* Delete Button - Moved here for better separation */}
+              {/* Action Buttons - Copy and Delete */}
               <div className="pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
-                <Button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setShowDeleteConfirm(true);
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setShowDeleteConfirm(true);
-                  }}
-                  variant="outline"
-                  className="w-full h-12 text-red-600 border-red-200/50 hover:bg-red-50/50 backdrop-blur-sm bg-white/30 dark:text-red-400 dark:border-red-800/50 dark:hover:bg-red-900/20 dark:bg-slate-800/30"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Workflow
-                </Button>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleCopyWorkflow();
+                    }}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!isLoading) {
+                        handleCopyWorkflow();
+                      }
+                    }}
+                    disabled={isLoading}
+                    variant="outline"
+                    className="flex-1 h-12 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-900/20"
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy Workflow
+                  </Button>
+                  <Button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowDeleteConfirm(true);
+                    }}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowDeleteConfirm(true);
+                    }}
+                    variant="outline"
+                    className="flex-1 h-12 text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -386,7 +469,7 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
                 }}
                 variant="outline"
                 disabled={isLoading}
-                className="flex-1 h-12 bg-white/50 backdrop-blur-sm border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-600/50 min-w-[120px]"
+                className="flex-1 h-12 min-w-[120px]"
               >
                 Cancel
               </Button>
@@ -404,7 +487,7 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
                   }
                 }}
                 disabled={isLoading || !name.trim()}
-                className="flex-1 h-12 bg-gradient-to-r from-blue-600/90 to-cyan-600/90 hover:from-blue-700/90 hover:to-cyan-700/90 text-white backdrop-blur-sm border-0 min-w-[120px]"
+                className="flex-1 h-12 min-w-[120px]"
               >
                 <Save className="h-4 w-4 mr-2" />
                 {isLoading ? 'Saving...' : 'Save Changes'}
@@ -427,7 +510,7 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
                 }}
                 variant="outline"
                 disabled={isLoading}
-                className="flex-1 h-12 bg-white/50 backdrop-blur-sm border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-600/50 min-w-[120px]"
+                className="flex-1 h-12 min-w-[120px]"
               >
                 Cancel
               </Button>
@@ -446,7 +529,7 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
                 }}
                 disabled={isLoading}
                 variant="destructive"
-                className="flex-1 h-12 bg-red-500/90 hover:bg-red-600/90 backdrop-blur-sm border-0 min-w-[120px]"
+                className="flex-1 h-12 min-w-[120px]"
               >
                 {isLoading ? 'Deleting...' : 'Delete Workflow'}
               </Button>

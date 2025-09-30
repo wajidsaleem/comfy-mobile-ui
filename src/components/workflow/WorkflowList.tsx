@@ -505,6 +505,19 @@ const WorkflowList: React.FC = () => {
     setWorkflows(prev => prev.filter(w => w.id !== workflowId));
   };
 
+  const handleWorkflowCopied = async (newWorkflow: Workflow) => {
+    // Reload all workflows from IndexedDB to ensure consistency
+    try {
+      const stored = await loadAllWorkflows();
+      setWorkflows(stored);
+      console.log('📦 Reloaded workflows after copy:', stored.length);
+    } catch (error) {
+      console.error('Failed to reload workflows after copy:', error);
+      // Fallback to optimistic update
+      setWorkflows(prev => [...prev, newWorkflow]);
+    }
+  };
+
   const handleEditModalClose = () => {
     setIsEditModalOpen(false);
     setEditingWorkflow(null);
@@ -830,6 +843,7 @@ const WorkflowList: React.FC = () => {
         workflow={editingWorkflow}
         onWorkflowUpdated={handleWorkflowUpdated}
         onWorkflowDeleted={handleWorkflowDeleted}
+        onWorkflowCopied={handleWorkflowCopied}
       />
     </div>
   );
