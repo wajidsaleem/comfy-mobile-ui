@@ -1,22 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { X, Plus, Save, Trash2, RefreshCw, Copy } from 'lucide-react';
+import { X, Plus, Save, Trash2, RefreshCw, Copy, ArrowLeft } from 'lucide-react';
 import { Workflow } from '@/shared/types/app/IComfyWorkflow';
 import { updateWorkflow, removeWorkflow, addWorkflow, loadAllWorkflows } from '@/infrastructure/storage/IndexedDBWorkflowService';
 import { generateWorkflowThumbnail } from '@/shared/utils/rendering/CanvasRendererService';
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface WorkflowEditModalProps {
   isOpen: boolean;
@@ -42,6 +35,32 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRegeneratingThumbnail, setIsRegeneratingThumbnail] = useState(false);
+
+  // Prevent body scroll and pull-to-refresh when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.top = `-${window.scrollY}px`;
+    } else {
+      const scrollY = document.body.style.top;
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.top = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.top = '';
+    };
+  }, [isOpen]);
 
   // Initialize form with workflow data
   useEffect(() => {
@@ -226,318 +245,329 @@ const WorkflowEditModal: React.FC<WorkflowEditModalProps> = ({
   if (!workflow) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent
-        className="sm:max-w-[500px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        <DialogHeader>
-          <DialogTitle className="text-slate-900 dark:text-slate-100">
-            Edit Workflow
-          </DialogTitle>
-          <DialogDescription className="text-slate-600 dark:text-slate-400">
-            Update workflow name, description, and tags
-          </DialogDescription>
-        </DialogHeader>
-
-        {!showDeleteConfirm ? (
-          <div className="space-y-6 py-4">
-            {/* Workflow Name */}
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Workflow Name
-              </Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter workflow name"
-                className="w-full"
-                autoFocus={false}
-              />
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ x: '100%' }}
+          animate={{ x: 0 }}
+          exit={{ x: '100%' }}
+          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+          className="fixed inset-0 z-[100] bg-gradient-to-br from-slate-50 via-blue-50/30 to-cyan-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 flex flex-col"
+          style={{ overscrollBehavior: 'contain' }}
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex-shrink-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-700 shadow-lg">
+            <div className="max-w-4xl mx-auto px-6 py-4">
+              <div className="flex items-center gap-4">
+                <Button
+                  onClick={handleClose}
+                  variant="ghost"
+                  size="sm"
+                  className="h-10 w-10 p-0"
+                  disabled={isLoading}
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                    Edit Workflow
+                  </h2>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Update workflow name, description, and tags
+                  </p>
+                </div>
+              </div>
             </div>
+          </div>
 
-            {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="description" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Description
-              </Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-                placeholder="Enter workflow description (optional)"
-                rows={3}
-                className="w-full resize-none"
-              />
-            </div>
+          {/* Content - Scrollable */}
+          <div className="flex-1 overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
+            <div className="max-w-4xl mx-auto px-6 py-8">
+              {!showDeleteConfirm ? (
+                <div className="space-y-6">
+                  {/* Workflow Name */}
+                  <div className="space-y-2">
+                    <Label htmlFor="name" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Workflow Name
+                    </Label>
+                    <Input
+                      id="name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Enter workflow name"
+                      className="w-full"
+                      autoFocus={false}
+                    />
+                  </div>
 
-            {/* Tags */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Tags
-              </Label>
-              
-              {/* Existing Tags */}
-              {tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag, index) => (
-                    <Badge
-                      key={index}
-                      variant="secondary"
-                      className="px-2 py-1 text-xs"
-                    >
-                      {tag}
-                      <button
+                  {/* Description */}
+                  <div className="space-y-2">
+                    <Label htmlFor="description" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Description
+                    </Label>
+                    <Textarea
+                      id="description"
+                      value={description}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                      placeholder="Enter workflow description (optional)"
+                      rows={3}
+                      className="w-full resize-none"
+                    />
+                  </div>
+
+                  {/* Tags */}
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Tags
+                    </Label>
+                    
+                    {/* Existing Tags */}
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {tags.map((tag, index) => (
+                          <Badge
+                            key={index}
+                            variant="secondary"
+                            className="px-2 py-1 text-xs"
+                          >
+                            {tag}
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRemoveTag(tag);
+                              }}
+                              className="ml-1 hover:text-red-500 transition-colors"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Add New Tag */}
+                    <div className="flex gap-2">
+                      <Input
+                        value={newTag}
+                        onChange={(e) => setNewTag(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Add a tag"
+                        className="flex-1"
+                      />
+                      <Button
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          handleRemoveTag(tag);
+                          handleAddTag();
                         }}
-                        className="ml-1 hover:text-red-500 transition-colors"
+                        disabled={!newTag.trim()}
+                        size="sm"
+                        variant="outline"
                       >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Thumbnail Section */}
+                  <div className="pt-4 border-t border-slate-200/50 dark:border-slate-700/50">
+                    <Label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 block">
+                      Workflow Thumbnail
+                    </Label>
+                    <div className="flex items-center gap-4">
+                      {workflow.thumbnail ? (
+                        <div className="flex-shrink-0">
+                          <img 
+                            src={workflow.thumbnail} 
+                            alt="Workflow thumbnail"
+                            className="w-20 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex-shrink-0 w-20 h-16 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center">
+                          <span className="text-xs text-slate-400">No thumbnail</span>
+                        </div>
+                      )}
+                      <Button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRegenerateThumbnail();
+                        }}
+                        onTouchEnd={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!isRegeneratingThumbnail && !isLoading) {
+                            handleRegenerateThumbnail();
+                          }
+                        }}
+                        disabled={isRegeneratingThumbnail || isLoading}
+                        variant="outline"
+                        size="sm"
+                      >
+                        <RefreshCw className={`h-4 w-4 mr-2 ${isRegeneratingThumbnail ? 'animate-spin' : ''}`} />
+                        {isRegeneratingThumbnail ? 'Regenerating...' : 'Regenerate'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Workflow Info */}
+                  <div className="pt-4 border-t border-slate-200/50 dark:border-slate-700/50">
+                    <div className="grid grid-cols-2 gap-4 text-sm text-slate-600 dark:text-slate-400 mb-4">
+                      <div>
+                        <span className="font-medium">Nodes:</span> {workflow.nodeCount}
+                      </div>
+                      <div>
+                        <span className="font-medium">Author:</span> {workflow.author || 'Unknown'}
+                      </div>
+                      <div>
+                        <span className="font-medium">Created:</span> {workflow.createdAt ? workflow.createdAt.toLocaleDateString() : 'Unknown'}
+                      </div>
+                      <div>
+                        <span className="font-medium">Modified:</span> {workflow.modifiedAt?.toLocaleDateString() || 'Never'}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons - Copy and Delete */}
+                    <div className="pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                      <div className="flex gap-3">
+                        <Button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleCopyWorkflow();
+                          }}
+                          onTouchEnd={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!isLoading) {
+                              handleCopyWorkflow();
+                            }
+                          }}
+                          disabled={isLoading}
+                          variant="outline"
+                          className="flex-1 h-12 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-900/20"
+                        >
+                          <Copy className="h-4 w-4 mr-2" />
+                          Copy Workflow
+                        </Button>
+                        <Button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowDeleteConfirm(true);
+                          }}
+                          onTouchEnd={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setShowDeleteConfirm(true);
+                          }}
+                          variant="outline"
+                          className="flex-1 h-12 text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Delete Confirmation */
+                <div className="py-12 text-center">
+                  <div className="mb-8">
+                    <Trash2 className="h-16 w-16 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-3">
+                      Delete Workflow
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400 text-lg">
+                      Are you sure you want to delete
+                    </p>
+                    <p className="text-slate-900 dark:text-slate-100 font-medium text-xl mt-3 mb-3 break-words">
+                      "{workflow.name}"
+                    </p>
+                    <p className="text-slate-600 dark:text-slate-400 text-lg">
+                      This action cannot be undone.
+                    </p>
+                  </div>
                 </div>
               )}
-
-              {/* Add New Tag */}
-              <div className="flex gap-2">
-                <Input
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Add a tag"
-                  className="flex-1"
-                />
-                <Button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleAddTag();
-                  }}
-                  disabled={!newTag.trim()}
-                  size="sm"
-                  variant="outline"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
             </div>
+          </div>
 
-            {/* Thumbnail Section */}
-            <div className="pt-4 border-t border-slate-200/50 dark:border-slate-700/50">
-              <Label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 block">
-                Workflow Thumbnail
-              </Label>
-              <div className="flex items-center gap-4">
-                {workflow.thumbnail ? (
-                  <div className="flex-shrink-0">
-                    <img 
-                      src={workflow.thumbnail} 
-                      alt="Workflow thumbnail"
-                      className="w-20 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex-shrink-0 w-20 h-16 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center">
-                    <span className="text-xs text-slate-400">No thumbnail</span>
-                  </div>
-                )}
+          {/* Footer - Fixed at bottom */}
+          <div className="flex-shrink-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-slate-200 dark:border-slate-700 shadow-lg">
+            <div className="max-w-4xl mx-auto px-6 py-4">
+              {!showDeleteConfirm ? (
                 <Button
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    handleRegenerateThumbnail();
+                    handleSave();
                   }}
                   onTouchEnd={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (!isRegeneratingThumbnail && !isLoading) {
-                      handleRegenerateThumbnail();
+                    if (!isLoading && name.trim()) {
+                      handleSave();
                     }
                   }}
-                  disabled={isRegeneratingThumbnail || isLoading}
-                  variant="outline"
-                  size="sm"
+                  disabled={isLoading || !name.trim()}
+                  className="w-full h-12"
                 >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${isRegeneratingThumbnail ? 'animate-spin' : ''}`} />
-                  {isRegeneratingThumbnail ? 'Regenerating...' : 'Regenerate'}
+                  <Save className="h-4 w-4 mr-2" />
+                  {isLoading ? 'Saving...' : 'Save Changes'}
                 </Button>
-              </div>
-            </div>
-
-            {/* Workflow Info */}
-            <div className="pt-4 border-t border-slate-200/50 dark:border-slate-700/50">
-              <div className="grid grid-cols-2 gap-4 text-sm text-slate-600 dark:text-slate-400 mb-4">
-                <div>
-                  <span className="font-medium">Nodes:</span> {workflow.nodeCount}
-                </div>
-                <div>
-                  <span className="font-medium">Author:</span> {workflow.author || 'Unknown'}
-                </div>
-                <div>
-                  <span className="font-medium">Created:</span> {workflow.createdAt ? workflow.createdAt.toLocaleDateString() : 'Unknown'}
-                </div>
-                <div>
-                  <span className="font-medium">Modified:</span> {workflow.modifiedAt?.toLocaleDateString() || 'Never'}
-                </div>
-              </div>
-
-              {/* Action Buttons - Copy and Delete */}
-              <div className="pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
-                <div className="flex gap-3">
+              ) : (
+                <div className="flex gap-4 w-full">
                   <Button
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      handleCopyWorkflow();
+                      setShowDeleteConfirm(false);
                     }}
                     onTouchEnd={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       if (!isLoading) {
-                        handleCopyWorkflow();
+                        setShowDeleteConfirm(false);
                       }
                     }}
-                    disabled={isLoading}
                     variant="outline"
-                    className="flex-1 h-12 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-900/20"
+                    disabled={isLoading}
+                    className="flex-1 h-12 min-w-[120px]"
                   >
-                    <Copy className="h-4 w-4 mr-2" />
-                    Copy Workflow
+                    Cancel
                   </Button>
                   <Button
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      setShowDeleteConfirm(true);
+                      handleDelete();
                     }}
                     onTouchEnd={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      setShowDeleteConfirm(true);
+                      if (!isLoading) {
+                        handleDelete();
+                      }
                     }}
-                    variant="outline"
-                    className="flex-1 h-12 text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20"
+                    disabled={isLoading}
+                    variant="destructive"
+                    className="flex-1 h-12 min-w-[120px]"
                   >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
+                    {isLoading ? 'Deleting...' : 'Delete Workflow'}
                   </Button>
                 </div>
-              </div>
+              )}
             </div>
           </div>
-        ) : (
-          /* Delete Confirmation */
-          <div className="py-6 text-center">
-            <div className="mb-4">
-              <Trash2 className="h-12 w-12 text-red-500 mx-auto mb-3" />
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
-                Delete Workflow
-              </h3>
-              <p className="text-slate-600 dark:text-slate-400">
-                Are you sure you want to delete
-              </p>
-              <p className="text-slate-900 dark:text-slate-100 font-medium mt-2 mb-2 break-words break-all">
-                "{workflow.name}"
-              </p>
-              <p className="text-slate-600 dark:text-slate-400">
-                This action cannot be undone.
-              </p>
-            </div>
-          </div>
-        )}
-
-        <DialogFooter className="flex justify-center">
-          {!showDeleteConfirm ? (
-            <div className="flex gap-4 w-full">
-              <Button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleClose();
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!isLoading) {
-                    handleClose();
-                  }
-                }}
-                variant="outline"
-                disabled={isLoading}
-                className="flex-1 h-12 min-w-[120px]"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSave();
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!isLoading && name.trim()) {
-                    handleSave();
-                  }
-                }}
-                disabled={isLoading || !name.trim()}
-                className="flex-1 h-12 min-w-[120px]"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {isLoading ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </div>
-          ) : (
-            <div className="flex gap-4 w-full">
-              <Button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setShowDeleteConfirm(false);
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!isLoading) {
-                    setShowDeleteConfirm(false);
-                  }
-                }}
-                variant="outline"
-                disabled={isLoading}
-                className="flex-1 h-12 min-w-[120px]"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleDelete();
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!isLoading) {
-                    handleDelete();
-                  }
-                }}
-                disabled={isLoading}
-                variant="destructive"
-                className="flex-1 h-12 min-w-[120px]"
-              >
-                {isLoading ? 'Deleting...' : 'Delete Workflow'}
-              </Button>
-            </div>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 
