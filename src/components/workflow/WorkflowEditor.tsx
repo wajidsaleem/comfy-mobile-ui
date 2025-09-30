@@ -1142,6 +1142,7 @@ const WorkflowEditor: React.FC = () => {
       const updatedWorkflow = {
         ...workflow,
         workflow_json: updatedWorkflowJson,
+        nodeCount: updatedWorkflowJson.nodes?.length || 0,
         modifiedAt: new Date()
       };
       
@@ -1344,9 +1345,10 @@ const WorkflowEditor: React.FC = () => {
       // 4. Update and save the workflow
       const updatedWorkflow = {
         ...workflow,
-        workflow_json: updatedWorkflowJson
+        workflow_json: updatedWorkflowJson,
+        nodeCount: updatedWorkflowJson.nodes?.length || 0
       };
-      
+
       await updateWorkflow(updatedWorkflow);
 
       // Update local workflow state

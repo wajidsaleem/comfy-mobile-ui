@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Upload, FileText, Menu, Loader2, Folder, ArrowUpDown, Search, X } from 'lucide-react';
+import { Upload, FileText, Menu, Loader2, Folder, ArrowUpDown, Search, X, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Workflow } from '@/shared/types/app/IComfyWorkflow';
 import WorkflowCard from './WorkflowCard';
@@ -523,6 +523,81 @@ const WorkflowList: React.FC = () => {
     setEditingWorkflow(null);
   };
 
+  const handleCreateEmptyWorkflow = async () => {
+    try {
+      setIsLoading(true);
+
+      // Generate new ID
+      const newId = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      // Find the highest number suffix for "New Workflow" names
+      const baseName = 'New Workflow';
+      const regex = new RegExp(`^${baseName}(?:_(\\d+))?$`);
+
+      let maxNumber = 0;
+      workflows.forEach(w => {
+        const match = w.name.match(regex);
+        if (match) {
+          const num = match[1] ? parseInt(match[1]) : 0;
+          maxNumber = Math.max(maxNumber, num);
+        }
+      });
+
+      const newNumber = maxNumber + 1;
+      const newName = maxNumber === 0 ? baseName : `${baseName}_${newNumber.toString().padStart(2, '0')}`;
+
+      // Create empty workflow (matching ComfyUI structure)
+      const emptyWorkflow: Workflow = {
+        id: newId,
+        name: newName,
+        description: '',
+        workflow_json: {
+          id: newId,
+          revision: 0,
+          last_node_id: 0,
+          last_link_id: 0,
+          nodes: [],
+          links: [],
+          groups: [],
+          config: {},
+          extra: {
+            ue_links: [],
+            ds: {
+              scale: 1.0,
+              offset: [0, 0]
+            }
+          },
+          version: 0.4
+        },
+        nodeCount: 0,
+        createdAt: new Date(),
+        modifiedAt: new Date(),
+        author: 'User',
+        tags: [],
+        isValid: true
+      };
+
+      // Add to storage
+      await addWorkflow(emptyWorkflow);
+
+      // Reload workflows
+      const stored = await loadAllWorkflows();
+      setWorkflows(stored);
+
+      toast.success(`Empty workflow "${newName}" created`);
+
+      // Navigate to the new workflow
+      navigate(`/workflow/${newId}`);
+    } catch (error) {
+      console.error('Failed to create empty workflow:', error);
+      toast.error('Failed to create empty workflow');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleReorder = async (newOrder: Workflow[]) => {
     // Assign sortOrder values based on the new array position
     const workflowsWithUpdatedOrder = newOrder.map((workflow, index) => ({
@@ -733,12 +808,28 @@ const WorkflowList: React.FC = () => {
                 <ArrowUpDown className="w-5 h-5 mr-2" />
                 {isReorderMode ? "Done" : "Reorder"}
               </Button>
-              <Badge 
-                variant="outline" 
-                className="px-4 py-2 text-sm bg-white/5 dark:bg-slate-800/5 backdrop-blur-2xl border border-white/10 dark:border-slate-600/10 text-slate-700 dark:text-slate-300 font-medium rounded-2xl min-h-[48px] flex items-center shadow-lg"
-              >
-                {searchQuery.trim() ? `${filteredWorkflows.length} / ${workflows.length}` : `${workflows.length}`} workflows
-              </Badge>
+              <div className="flex items-center gap-3">
+                <Badge
+                  variant="outline"
+                  className="px-4 py-2 text-sm bg-white/5 dark:bg-slate-800/5 backdrop-blur-2xl border border-white/10 dark:border-slate-600/10 text-slate-700 dark:text-slate-300 font-medium rounded-2xl min-h-[48px] flex items-center shadow-lg"
+                >
+                  {searchQuery.trim() ? `${filteredWorkflows.length} / ${workflows.length}` : `${workflows.length}`} workflows
+                </Badge>
+                <Button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCreateEmptyWorkflow();
+                  }}
+                  variant="ghost"
+                  size="default"
+                  className="px-4 py-3 rounded-2xl transition-all duration-300 font-medium min-h-[48px] min-w-[48px] bg-green-500/10 dark:bg-green-500/10 backdrop-blur-2xl border border-green-400/30 dark:border-green-500/30 hover:bg-green-500/20 dark:hover:bg-green-500/20 text-green-600 dark:text-green-400 shadow-lg"
+                  title="Create empty workflow"
+                  disabled={isLoading}
+                >
+                  <Plus className="w-5 h-5" />
+                </Button>
+              </div>
             </div>
 
             {/* Reorder Mode Banner */}

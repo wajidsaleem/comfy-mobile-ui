@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Calendar, User, Settings, Tag, AlertCircle, Server, GripVertical } from 'lucide-react';
 import { DragControls } from 'framer-motion';
 import { Workflow } from '@/shared/types/app/IComfyWorkflow';
+import { generateWorkflowThumbnail } from '@/shared/utils/rendering/CanvasRendererService';
+import { updateWorkflow } from '@/infrastructure/storage/IndexedDBWorkflowService';
 
 interface WorkflowCardProps {
   workflow: Workflow;
@@ -23,14 +25,48 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({
   isCompactMode = false,
   dragControls
 }) => {
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | undefined>(workflow.thumbnail);
+
+  // Auto-generate thumbnail if missing but nodes exist
+  useEffect(() => {
+    const generateMissingThumbnail = async () => {
+      // Only generate if: has nodes but no thumbnail
+      if (workflow.nodeCount > 0 && !workflow.thumbnail && workflow.workflow_json) {
+        try {
+          const thumbnail = generateWorkflowThumbnail({
+            nodes: (workflow.workflow_json.nodes || []) as any,
+            links: (workflow.workflow_json.links || []) as any,
+            groups: (workflow.workflow_json.groups || []) as any
+          });
+
+          if (thumbnail) {
+            // Update local state for immediate display
+            setThumbnailUrl(thumbnail);
+
+            // Update workflow in IndexedDB
+            const updatedWorkflow: Workflow = {
+              ...workflow,
+              thumbnail: thumbnail
+            };
+            await updateWorkflow(updatedWorkflow);
+          }
+        } catch (error) {
+          console.error('Failed to auto-generate thumbnail:', error);
+        }
+      }
+    };
+
+    generateMissingThumbnail();
+  }, [workflow.nodeCount, workflow.thumbnail, workflow.workflow_json, workflow]);
+
   const handleCardClick = (e: React.MouseEvent) => {
     // Block card click when in compact (reorder) mode
     if (isCompactMode) {
       return;
     }
-    
+
     // Prevent card click when clicking on action buttons or drag handle
-    if ((e.target as HTMLElement).closest('[data-action-button]') || 
+    if ((e.target as HTMLElement).closest('[data-action-button]') ||
         (e.target as HTMLElement).closest('[data-drag-handle]')) {
       return;
     }
@@ -98,13 +134,13 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({
             
             {/* 2. thumbnail icon */}
             <div className={`${isCompactMode ? 'w-10 h-10' : 'w-14 h-14'} rounded-2xl flex items-center justify-center shadow-lg overflow-hidden backdrop-blur-md border ${
-              workflow.isValid 
-                ? 'bg-slate-100/10 dark:bg-slate-700/15 border-slate-200/20 dark:border-slate-600/25' 
+              workflow.isValid
+                ? 'bg-slate-100/10 dark:bg-slate-700/15 border-slate-200/20 dark:border-slate-600/25'
                 : 'bg-red-500/15 dark:bg-red-500/20 border-red-300/25 dark:border-red-500/30'
             }`}>
-              {workflow.thumbnail ? (
-                <img 
-                  src={workflow.thumbnail} 
+              {thumbnailUrl ? (
+                <img
+                  src={thumbnailUrl}
                   alt={`${workflow.name} workflow thumbnail`}
                   className="w-full h-full object-cover"
                 />
@@ -131,19 +167,11 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({
               
               {/* node count */}
               <div>
-                <Badge 
+                <Badge
                   variant="outline"
-                  className={`text-xs px-3 py-1 font-medium backdrop-blur-md ${
-                    workflow.nodeCount === 0 
-                      ? "bg-red-500/15 border-red-400/30 dark:border-red-500/35 text-red-700 dark:text-red-400" 
-                      : "bg-slate-100/10 dark:bg-slate-700/15 border-slate-200/25 dark:border-slate-600/25 text-slate-700 dark:text-slate-300"
-                  }`}
+                  className="text-xs px-3 py-1 font-medium backdrop-blur-md bg-slate-100/10 dark:bg-slate-700/15 border-slate-200/25 dark:border-slate-600/25 text-slate-700 dark:text-slate-300"
                 >
-                  {workflow.nodeCount === 0 ? (
-                    <><AlertCircle className="w-3 h-3 mr-1" /> 0 nodes</>
-                  ) : (
-                    `${workflow.nodeCount} nodes`
-                  )}
+                  {workflow.nodeCount} {workflow.nodeCount === 1 ? 'node' : 'nodes'}
                 </Badge>
               </div>
               
