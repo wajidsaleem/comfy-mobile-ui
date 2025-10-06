@@ -14,6 +14,8 @@ import BrowserDataBackup from '@/components/etc/BrowserDataBackup';
 import ApiKeyManagement from '@/components/settings/ApiKeyManagement';
 import { CustomTypeManager } from '@/components/etc/CustomTypeManager';
 import VideoDownloader from '@/components/videos/VideoDownloader';
+import WorkflowChainList from '@/components/workflow_chain/WorkflowChainList';
+import WorkflowChainEditor from '@/components/workflow_chain/WorkflowChainEditor';
 import { Toaster } from '@/components/ui/sonner';
 import { useConnectionStore } from '@/ui/store/connectionStore';
 import { globalWebSocketService } from '@/infrastructure/websocket/GlobalWebSocketService';
@@ -191,6 +193,9 @@ const AppRouter: React.FC = () => {
       <Routes>
         <Route path="/" element={<WorkflowList />} />
         <Route path="/workflow/:id" element={<WorkflowEditor />} />
+        <Route path="/chains" element={<WorkflowChainList />} />
+        <Route path="/chains/create" element={<WorkflowChainEditor />} />
+        <Route path="/chains/edit/:id" element={<WorkflowChainEditor />} />
         <Route path="/settings/server" element={<ServerSettings />} />
         <Route path="/reboot" element={<ServerReboot />} />
         <Route path="/import/server" element={<WorkflowImport />} />

@@ -1716,7 +1716,13 @@ const WorkflowEditor: React.FC = () => {
         const templateOutputsByName = new Map(templateOutputs.map(slot => [slot.name, slot]));
 
         // Start with existing inputs and add new template inputs
-        const mergedInputs = [...existingInputs];
+        const mergedInputs = existingInputs.map(slot => {
+          // Ensure widget slots have link: null property
+          if (slot.widget && slot.link === undefined) {
+            return { ...slot, link: null };
+          }
+          return slot;
+        });
         for (const templateSlot of templateInputs) {
           if (!existingInputsByName.has(templateSlot.name)) {
             // Add new slot from template if it doesn't exist

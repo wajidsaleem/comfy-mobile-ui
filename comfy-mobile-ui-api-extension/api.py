@@ -29,6 +29,8 @@ try:
     from .handlers.node_mapping_handler import *
     from .handlers.manager_handler import *
     from .handlers.video_download_handler import *
+    from .handlers.chain_handler import *
+    from .handlers.chain_progress_handler import *
 except ImportError as e:
     print(f"Warning: Could not import handlers: {e}")
     # Fallback imports (for development/testing)
@@ -44,6 +46,8 @@ except ImportError as e:
     from handlers.node_mapping_handler import *
     from handlers.manager_handler import *
     from handlers.video_download_handler import *
+    from handlers.chain_handler import *
+    from handlers.chain_progress_handler import *
 
 def get_routes():
     """Get routes from ComfyUI server module"""
@@ -160,6 +164,18 @@ def setup_routes():
                 app.router.add_post('/comfymobile/api/logs/subscribe', subscribe_to_logs)
                 app.router.add_post('/comfymobile/api/videos/upgrade-yt-dlp', upgrade_yt_dlp)
 
+                # Workflow Chain routes
+                app.router.add_get('/comfymobile/api/chains/list', list_workflow_chains)
+                app.router.add_get('/comfymobile/api/chains/content/{chain_id}', get_chain_content)
+                app.router.add_get('/comfymobile/api/chains/summary/{chain_id}', get_chain_summary_api)
+                app.router.add_post('/comfymobile/api/chains/save', save_workflow_chain)
+                app.router.add_delete('/comfymobile/api/chains/delete', delete_workflow_chain)
+                app.router.add_post('/comfymobile/api/chains/execute', execute_chain_api)
+                app.router.add_post('/comfymobile/api/chains/interrupt', interrupt_chain_api)
+                app.router.add_get('/comfymobile/api/chains/progress', chain_progress_websocket)
+                app.router.add_post('/comfymobile/api/chains/thumbnails', save_chain_thumbnail_api)
+                app.router.add_get('/comfymobile/api/chains/thumbnails/{chain_id}/{node_filename}', get_chain_thumbnail_api)
+
                 print("✅ ComfyMobileUI API routes registered successfully")
                 print("📋 Modular handlers loaded:")
                 print("   🗂️  System Handler - status, reboot")
@@ -173,6 +189,7 @@ def setup_routes():
                 print("   🧩  Widget Handler - custom widget type management")
                 print("   🔗  Node Mapping Handler - node input mappings")
                 print("   🎥  Video Download Handler - YouTube video downloads")
+                print("   ⛓️  Chain Handler - workflow chain management")
                 return True
         
         # Method 2: Try direct routes access (older versions)

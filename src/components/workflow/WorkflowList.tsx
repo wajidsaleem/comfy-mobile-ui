@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Upload, FileText, Menu, Loader2, Folder, ArrowUpDown, Search, X, Plus } from 'lucide-react';
+import { Upload, FileText, Menu, Loader2, Folder, ArrowUpDown, Search, X, Plus, Link as LinkIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Workflow } from '@/shared/types/app/IComfyWorkflow';
 import WorkflowCard from './WorkflowCard';
@@ -828,6 +828,20 @@ const WorkflowList: React.FC = () => {
                   disabled={isLoading}
                 >
                   <Plus className="w-5 h-5" />
+                </Button>
+                <Button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    navigate('/chains');
+                  }}
+                  variant="ghost"
+                  size="default"
+                  className="px-4 py-3 rounded-2xl transition-all duration-300 font-medium min-h-[48px] min-w-[48px] bg-purple-500/10 dark:bg-purple-500/10 backdrop-blur-2xl border border-purple-400/30 dark:border-purple-500/30 hover:bg-purple-500/20 dark:hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 shadow-lg"
+                  title="Workflow Chains"
+                  disabled={isLoading}
+                >
+                  <LinkIcon className="w-5 h-5" />
                 </Button>
               </div>
             </div>

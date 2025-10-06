@@ -589,6 +589,45 @@ export const clearVRAM = async (
 };
 
 /**
+ * Convert workflow JSON directly to API format (all-in-one function)
+ * @param workflowJson The workflow JSON object from ComfyUI
+ * @param serverUrl The ComfyUI server URL for fetching object_info
+ * @param config Optional configuration
+ * @returns API workflow ready for execution
+ */
+export const convertJsonToAPI = async (
+  workflowJson: any,
+  serverUrl: string,
+  config: ComfyAPIConfig = {}
+): Promise<{ apiWorkflow: any; nodeCount: number }> => {
+  const { timeout = 5000 } = config;
+
+  try {
+    console.log('🚀 convertJsonToAPI: Starting workflow JSON to API conversion...');
+
+    // Step 1: Get object info from server
+    console.log('📡 Fetching object_info from server...');
+    const response = await axios.get(`${serverUrl}/object_info`, { timeout });
+    const objectInfo = response.data;
+
+    // Step 2: Convert JSON to Graph (disable preprocessing to avoid custom node mapping dependency)
+    console.log('🔄 Converting JSON to Graph...');
+    const graph = await loadWorkflowToGraph(workflowJson, objectInfo, true, false);
+
+    // Step 3: Convert Graph to API format
+    console.log('🔧 Converting Graph to API format...');
+    const result = convertGraphToAPI(graph);
+
+    console.log('✅ convertJsonToAPI: Conversion complete');
+    return result;
+
+  } catch (error) {
+    console.error('❌ convertJsonToAPI failed:', error);
+    throw new Error(`Failed to convert workflow JSON to API format: ${error instanceof Error ? error.message : String(error)}`);
+  }
+};
+
+/**
  * Convert Graph to API format (Enhanced with legacy logic for better accuracy)
  */
 export const convertGraphToAPI = (graph: any): { apiWorkflow: any; nodeCount: number } => {
@@ -2128,6 +2167,7 @@ export const ComfyAPI = {
   getServerInfo,
   clearCache,
   clearVRAM,
+  convertJsonToAPI,
   convertGraphToAPI,
   getPromptHistory,
   getQueueStatus,
